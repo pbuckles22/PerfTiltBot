@@ -1,0 +1,14 @@
+# Bot Configuration
+bot:
+  name: "PerfTiltBot"
+  version: "0.1.0"
+
+# Logging Configuration
+logging:
+  level: "info"
+  format: "text" # text or json
+
+# API Configuration
+api:
+  port: 8080
+  host: "localhost" 
