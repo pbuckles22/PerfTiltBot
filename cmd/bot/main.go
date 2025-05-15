@@ -130,35 +130,33 @@ func main() {
 		}
 	})
 
+	// Connect to Twitch IRC in a separate goroutine
+	go func() {
+		if err := client.Connect(); err != nil {
+			log.Fatalf("Error connecting to Twitch IRC: %v", err)
+		}
+	}()
+
+	// Wait for successful connection
+	select {
+	case <-connectionEstablished:
+		log.Println("Bot is now running. Press Ctrl+C to exit.")
+	case <-time.After(time.Second * 30):
+		log.Fatal("Failed to establish connection within timeout")
+	}
+
 	// Set up graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Connect in a goroutine
-	log.Printf("Attempting to connect to Twitch IRC...")
+	// Wait for either shutdown signal or kill command
 	go func() {
-		if err := client.Connect(); err != nil {
-			log.Printf("Connection error: %v", err)
-			connectionEstablished <- false
-		}
+		<-sigChan
+		cmdManager.RequestShutdown()
 	}()
 
-	// Wait for either successful connection or timeout
-	select {
-	case success := <-connectionEstablished:
-		if !success {
-			log.Fatal("Failed to establish connection to Twitch")
-		}
-		log.Printf("Connection and channel join successful")
-	case <-time.After(time.Second * 30): // Increased timeout to 30 seconds
-		log.Fatal("Timeout while establishing connection to Twitch")
-	}
-
-	log.Printf("Bot is fully running in channel: %s", secrets.Twitch.Channel)
-	fmt.Printf("Bot is ready! Use %shelp in chat to see available commands.\n", botConfig.Bot.CommandPrefix)
-
-	// Wait for shutdown signal
-	<-sigChan
+	// Wait for shutdown request
+	cmdManager.WaitForShutdown()
 
 	// Graceful shutdown
 	log.Println("Shutting down gracefully...")

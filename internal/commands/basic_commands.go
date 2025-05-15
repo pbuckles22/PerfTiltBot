@@ -8,58 +8,65 @@ import (
 	"github.com/gempir/go-twitch-irc/v4"
 )
 
-// RegisterBasicCommands adds the default commands to the command manager
+// RegisterBasicCommands adds the default commands to the command manager.
+// This includes core functionality like help, ping, and queue management.
 func RegisterBasicCommands(cm *CommandManager) {
-	// Help command
+	// Help command - Shows available commands based on queue state
+	// When queue is disabled: Shows only basic commands
+	// When queue is enabled: Shows both basic and queue commands
 	cm.RegisterCommand(Command{
 		Name:        "help",
 		Description: "Shows the list of available commands",
 		Handler: func(message twitch.PrivateMessage) string {
 			queue := cm.GetQueue()
 			commands := cm.GetCommandList()
-			var baseList []string
-			var queueList []string
+			var commandList []string
 
-			// Define base commands that are always shown
+			// Define base commands that are always shown regardless of queue state
 			baseCommands := map[string]bool{
 				"help":       true,
 				"ping":       true,
 				"startqueue": true,
-				"endqueue":   true,
 			}
 
-			// Define queue-specific commands
+			// Define queue commands that are only shown when queue is enabled
 			queueCommands := map[string]bool{
+				"help":       true,
 				"queue":      true,
 				"join":       true,
 				"leave":      true,
-				"clearqueue": true,
 				"position":   true,
+				"endqueue":   true,
+				"clearqueue": true,
 			}
 
+			// Build the list of commands to display
 			for _, cmd := range commands {
+				// Add aliases to the description if any exist
 				desc := cmd.Description
 				if len(cmd.Aliases) > 0 {
-					desc = fmt.Sprintf("%s (aliases: %s)", desc, strings.Join(cmd.Aliases, ", "))
+					desc = fmt.Sprintf("%s (aliases: %s)", desc, strings.Join(cmd.Aliases, ", !"))
 				}
 				cmdInfo := fmt.Sprintf("%s: %s", cmd.Name, desc)
 
-				if baseCommands[cmd.Name] {
-					baseList = append(baseList, cmdInfo)
-				} else if queueCommands[cmd.Name] {
-					queueList = append(queueList, cmdInfo)
+				// Only show base commands when queue is disabled
+				if baseCommands[cmd.Name] && !queue.IsEnabled() {
+					commandList = append(commandList, cmdInfo)
+					// Show queue commands only when queue is enabled
+				} else if queueCommands[cmd.Name] && queue.IsEnabled() {
+					commandList = append(commandList, cmdInfo)
 				}
 			}
 
-			result := fmt.Sprintf("Base commands: %s", strings.Join(baseList, " | "))
-			if queue.IsEnabled() {
-				result += fmt.Sprintf("\nQueue commands: %s", strings.Join(queueList, " | "))
+			if len(commandList) == 0 {
+				return "No commands available."
 			}
-			return result
+
+			return fmt.Sprintf("Available commands: %s", strings.Join(commandList, " | "))
 		},
 	})
 
-	// Ping command
+	// Ping command - Simple bot health check
 	cm.RegisterCommand(Command{
 		Name:        "ping",
 		Description: "Check if the bot is running",
@@ -68,7 +75,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Start Queue command (mod only)
+	// Start Queue command - Enables the queue system (mod only)
 	cm.RegisterCommand(Command{
 		Name:        "startqueue",
 		Aliases:     []string{"sq"},
@@ -84,7 +91,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// End Queue command (mod only)
+	// End Queue command - Disables and clears the queue (mod only)
 	cm.RegisterCommand(Command{
 		Name:        "endqueue",
 		Aliases:     []string{"eq"},
@@ -100,7 +107,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Queue command
+	// Queue command - Shows current queue status
 	cm.RegisterCommand(Command{
 		Name:        "queue",
 		Aliases:     []string{"q"},
@@ -117,6 +124,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return "The queue is currently empty."
 			}
 
+			// Build numbered list of users in queue
 			var userList []string
 			for i, user := range users {
 				userList = append(userList, fmt.Sprintf("%d. %s", i+1, user.Username))
@@ -126,7 +134,9 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Join command
+	// Join command - Adds a user to the queue
+	// Regular users can only add themselves
+	// Mods/VIPs can add others and specify positions
 	cm.RegisterCommand(Command{
 		Name:        "join",
 		Description: "Join the queue. Mods/VIPs can add others with !join [username] or !join [username] [position]",
@@ -139,7 +149,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 			parts := strings.Fields(message.Message)
 
-			// Handle regular users
+			// Handle regular users (can only add themselves)
 			if !isPrivileged(message) {
 				err := queue.Add(message.User.Name, false)
 				if err != nil {
@@ -149,8 +159,9 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return fmt.Sprintf("@%s has joined the queue at position %d!", message.User.Name, position)
 			}
 
-			// Handle privileged users
+			// Handle privileged users (mods/VIPs)
 			if len(parts) < 2 {
+				// No target specified, add themselves
 				err := queue.Add(message.User.Name, true)
 				if err != nil {
 					return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
@@ -159,11 +170,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return fmt.Sprintf("@%s has joined the queue at position %d!", message.User.Name, position)
 			}
 
-			// Get target user
+			// Get target user to add
 			targetUser := strings.TrimPrefix(parts[1], "@")
 			isMod := message.User.Badges["moderator"] > 0 || message.User.Badges["broadcaster"] > 0
 
-			// Check for position parameter
+			// Check if position was specified
 			if len(parts) > 2 {
 				position, err := strconv.Atoi(parts[2])
 				if err != nil {
@@ -187,7 +198,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Leave command
+	// Leave command - Removes a user from the queue
 	cm.RegisterCommand(Command{
 		Name:        "leave",
 		Description: "Leave the queue. Mods/VIPs can remove others with !leave [username]",
@@ -219,10 +230,10 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Clear command (mod only)
+	// Clear command - Removes all users from the queue (mod only)
 	cm.RegisterCommand(Command{
-		Name:        "clearqueue",
-		Aliases:     []string{"cq"},
+		Name:        "clearline",
+		Aliases:     []string{"cl"},
 		Description: "Clear the entire queue (Mods only)",
 		ModOnly:     true,
 		Handler: func(message twitch.PrivateMessage) string {
@@ -237,7 +248,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Position command
+	// Position command - Shows a user's position in queue
 	cm.RegisterCommand(Command{
 		Name:        "position",
 		Aliases:     []string{"pos"},
@@ -254,6 +265,23 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return fmt.Sprintf("@%s, you are not in the queue!", message.User.Name)
 			}
 			return fmt.Sprintf("@%s, you are at position %d in the queue!", message.User.Name, position)
+		},
+	})
+
+	// Kill command - Safely shuts down the bot (mod only)
+	cm.RegisterCommand(Command{
+		Name:        "kill",
+		Description: "Safely shut down the bot (Mods/VIPs only)",
+		ModOnly:     false,
+		Handler: func(message twitch.PrivateMessage) string {
+			// Check if user is privileged (Mod, VIP, or Broadcaster)
+			if !isPrivileged(message) {
+				return "This command can only be used by moderators and VIPs."
+			}
+
+			// Signal that we want to shut down
+			cm.RequestShutdown()
+			return fmt.Sprintf("@%s has initiated bot shutdown. Goodbye! 👋", message.User.Name)
 		},
 	})
 }
