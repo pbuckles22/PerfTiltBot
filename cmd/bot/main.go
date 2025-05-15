@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gempir/go-twitch-irc/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -59,7 +60,24 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	log.Printf("Bot configured for channel: %s", config.Twitch.Channel)
+	// Create Twitch client
+	client := twitch.NewClient(config.Twitch.BotUsername, config.Twitch.BotToken)
+
+	// Register message handler
+	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+		log.Printf("Message from %s: %s", message.User.Name, message.Message)
+	})
+
+	// Connect to Twitch
+	client.Join(config.Twitch.Channel)
+
+	go func() {
+		if err := client.Connect(); err != nil {
+			log.Fatalf("Failed to connect to Twitch: %v", err)
+		}
+	}()
+
+	log.Printf("Bot connected and joined channel: %s", config.Twitch.Channel)
 
 	// Set up graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -69,4 +87,5 @@ func main() {
 	<-sigChan
 
 	log.Println("Shutting down gracefully...")
+	client.Disconnect()
 }
