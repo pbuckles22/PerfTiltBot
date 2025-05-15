@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -61,52 +62,55 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Create Twitch client with connection timeout
+	log.Printf("Loaded configuration for bot: %s, channel: %s", config.Twitch.BotUsername, config.Twitch.Channel)
+
+	// Create Twitch client
 	client := twitch.NewClient(config.Twitch.BotUsername, config.Twitch.BotToken)
-	client.SetConnectionTimeout(time.Second * 10)
+
+	// Channel to track successful connection
+	connectionEstablished := make(chan bool)
 
 	// Register handlers
 	client.OnConnect(func() {
-		log.Printf("Connected to Twitch IRC")
+		log.Printf("Successfully connected to Twitch IRC")
+		// Join the channel after connection is established
+		log.Printf("Attempting to join channel: %s", config.Twitch.Channel)
 		client.Join(config.Twitch.Channel)
+		connectionEstablished <- true
 	})
 
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		log.Printf("Message from %s: %s", message.User.Name, message.Message)
 	})
 
-	client.OnDisconnect(func() {
-		log.Printf("Disconnected from Twitch IRC")
-	})
-
 	// Set up graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Connect in a goroutine so we can handle shutdown
-	connected := make(chan bool)
-	var connectErr error
+	// Connect in a goroutine
+	log.Printf("Attempting to connect to Twitch IRC...")
 	go func() {
-		log.Printf("Attempting to connect to Twitch IRC...")
 		if err := client.Connect(); err != nil {
-			connectErr = err
-			connected <- false
-			return
+			log.Printf("Connection error: %v", err)
+			connectionEstablished <- false
 		}
-		connected <- true
 	}()
 
-	// Wait for either connection or timeout
+	// Wait for either successful connection or timeout
 	select {
-	case success := <-connected:
+	case success := <-connectionEstablished:
 		if !success {
-			log.Fatalf("Failed to connect to Twitch: %v", connectErr)
+			log.Fatal("Failed to establish connection to Twitch")
 		}
-	case <-time.After(time.Second * 15):
-		log.Fatal("Timeout while connecting to Twitch")
+		log.Printf("Connection and channel join successful")
+	case <-time.After(time.Second * 30): // Increased timeout to 30 seconds
+		log.Fatal("Timeout while establishing connection to Twitch")
 	}
 
-	log.Printf("Bot is running in channel: %s", config.Twitch.Channel)
+	log.Printf("Bot is fully running in channel: %s", config.Twitch.Channel)
+
+	client.Say(config.Twitch.Channel, "Hello Bitches! W pbuck")
+
 	fmt.Println("Press CTRL-C to exit.")
 
 	// Wait for shutdown signal
@@ -116,9 +120,14 @@ func main() {
 	log.Println("Shutting down gracefully...")
 
 	// Send a part message before disconnecting
+	log.Printf("Leaving channel: %s", config.Twitch.Channel)
 	client.Depart(config.Twitch.Channel)
 
 	// Create a shutdown timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*10) // Increased timeout to 10 seconds
+	defer shutdownCancel()
+
+	// Create a channel to signal disconnect completion
 	done := make(chan bool)
 	go func() {
 		client.Disconnect()
@@ -129,7 +138,7 @@ func main() {
 	select {
 	case <-done:
 		log.Println("Successfully disconnected from Twitch")
-	case <-time.After(time.Second * 5):
+	case <-shutdownCtx.Done():
 		log.Println("Forced shutdown after timeout")
 	}
 }
