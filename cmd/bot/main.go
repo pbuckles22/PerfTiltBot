@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"github.com/gempir/go-twitch-irc/v4"
+	"github.com/pbuckles22/PerfTiltBot/internal/commands"
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
+type SecretsConfig struct {
 	Twitch struct {
 		BotToken     string `yaml:"bot_token"`
 		ClientID     string `yaml:"client_id"`
@@ -21,22 +22,33 @@ type Config struct {
 		BotUsername  string `yaml:"bot_username"`
 		Channel      string `yaml:"channel"`
 	} `yaml:"twitch"`
-	APIs struct {
-		ExampleAPIKey string `yaml:"example_api_key"`
-	} `yaml:"apis"`
 }
 
-func loadConfig(path string) (*Config, error) {
-	config := &Config{}
+type BotConfig struct {
+	Bot struct {
+		CommandPrefix string `yaml:"command_prefix"`
+		Cooldowns     struct {
+			Default   int `yaml:"default"`
+			Moderator int `yaml:"moderator"`
+		} `yaml:"cooldowns"`
+		Permissions struct {
+			ModeratorOnly   []string `yaml:"moderator_only"`
+			BroadcasterOnly []string `yaml:"broadcaster_only"`
+		} `yaml:"permissions"`
+	} `yaml:"bot"`
+}
+
+func loadSecretsConfig(path string) (*SecretsConfig, error) {
+	config := &SecretsConfig{}
 
 	file, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %w", err)
+		return nil, fmt.Errorf("error reading secrets file: %w", err)
 	}
 
 	err = yaml.Unmarshal(file, config)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %w", err)
+		return nil, fmt.Errorf("error parsing secrets file: %w", err)
 	}
 
 	// Validate required fields
@@ -53,19 +65,49 @@ func loadConfig(path string) (*Config, error) {
 	return config, nil
 }
 
+func loadBotConfig(path string) (*BotConfig, error) {
+	config := &BotConfig{}
+
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading bot config file: %w", err)
+	}
+
+	err = yaml.Unmarshal(file, config)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing bot config file: %w", err)
+	}
+
+	// Set default command prefix if not specified
+	if config.Bot.CommandPrefix == "" {
+		config.Bot.CommandPrefix = "!"
+	}
+
+	return config, nil
+}
+
 func main() {
 	log.Println("Starting PerfTiltBot...")
 
-	// Load configuration
-	config, err := loadConfig("configs/secrets.yaml")
+	// Load configurations
+	secrets, err := loadSecretsConfig("configs/secrets.yaml")
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		log.Fatalf("Failed to load secrets configuration: %v", err)
 	}
 
-	log.Printf("Loaded configuration for bot: %s, channel: %s", config.Twitch.BotUsername, config.Twitch.Channel)
+	botConfig, err := loadBotConfig("configs/bot.yaml")
+	if err != nil {
+		log.Fatalf("Failed to load bot configuration: %v", err)
+	}
+
+	log.Printf("Loaded configuration for bot: %s, channel: %s", secrets.Twitch.BotUsername, secrets.Twitch.Channel)
+
+	// Create command manager
+	cmdManager := commands.NewCommandManager(botConfig.Bot.CommandPrefix)
+	commands.RegisterBasicCommands(cmdManager)
 
 	// Create Twitch client
-	client := twitch.NewClient(config.Twitch.BotUsername, config.Twitch.BotToken)
+	client := twitch.NewClient(secrets.Twitch.BotUsername, secrets.Twitch.BotToken)
 
 	// Channel to track successful connection
 	connectionEstablished := make(chan bool)
@@ -74,13 +116,18 @@ func main() {
 	client.OnConnect(func() {
 		log.Printf("Successfully connected to Twitch IRC")
 		// Join the channel after connection is established
-		log.Printf("Attempting to join channel: %s", config.Twitch.Channel)
-		client.Join(config.Twitch.Channel)
+		log.Printf("Attempting to join channel: %s", secrets.Twitch.Channel)
+		client.Join(secrets.Twitch.Channel)
 		connectionEstablished <- true
 	})
 
 	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
 		log.Printf("Message from %s: %s", message.User.Name, message.Message)
+
+		// Handle commands
+		if response, isCommand := cmdManager.HandleMessage(message); isCommand && response != "" {
+			client.Say(message.Channel, response)
+		}
 	})
 
 	// Set up graceful shutdown
@@ -107,11 +154,8 @@ func main() {
 		log.Fatal("Timeout while establishing connection to Twitch")
 	}
 
-	log.Printf("Bot is fully running in channel: %s", config.Twitch.Channel)
-
-	client.Say(config.Twitch.Channel, "Hello Bitches! W pbuck")
-
-	fmt.Println("Press CTRL-C to exit.")
+	log.Printf("Bot is fully running in channel: %s", secrets.Twitch.Channel)
+	fmt.Printf("Bot is ready! Use %shelp in chat to see available commands.\n", botConfig.Bot.CommandPrefix)
 
 	// Wait for shutdown signal
 	<-sigChan
@@ -120,11 +164,11 @@ func main() {
 	log.Println("Shutting down gracefully...")
 
 	// Send a part message before disconnecting
-	log.Printf("Leaving channel: %s", config.Twitch.Channel)
-	client.Depart(config.Twitch.Channel)
+	log.Printf("Leaving channel: %s", secrets.Twitch.Channel)
+	client.Depart(secrets.Twitch.Channel)
 
 	// Create a shutdown timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*10) // Increased timeout to 10 seconds
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer shutdownCancel()
 
 	// Create a channel to signal disconnect completion

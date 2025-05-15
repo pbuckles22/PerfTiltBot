@@ -1,0 +1,16 @@
+# Bot Configuration
+bot:
+  # Command prefix for triggering bot commands
+  command_prefix: "!"
+
+  # Command cooldowns (in seconds)
+  cooldowns:
+    default: 3
+    moderator: 1
+
+  # Command permissions
+  permissions:
+    # Commands that only moderators can use
+    moderator_only: []
+    # Commands that only the broadcaster can use
+    broadcaster_only: [] 
