@@ -15,15 +15,40 @@ type QueuedUser struct {
 
 // Queue manages the user queue
 type Queue struct {
-	users []QueuedUser
-	mu    sync.RWMutex
+	users   []QueuedUser
+	enabled bool
+	mu      sync.RWMutex
 }
 
 // NewQueue creates a new queue manager
 func NewQueue() *Queue {
 	return &Queue{
-		users: make([]QueuedUser, 0),
+		users:   make([]QueuedUser, 0),
+		enabled: false,
 	}
+}
+
+// Enable starts the queue system
+func (q *Queue) Enable() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.enabled = true
+	q.users = make([]QueuedUser, 0) // Clear queue when enabling
+}
+
+// Disable stops the queue system and clears the queue
+func (q *Queue) Disable() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.enabled = false
+	q.users = make([]QueuedUser, 0)
+}
+
+// IsEnabled returns whether the queue system is enabled
+func (q *Queue) IsEnabled() bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.enabled
 }
 
 // Clear removes all users from the queue
@@ -40,6 +65,10 @@ func (q *Queue) Clear() int {
 func (q *Queue) Add(username string, isMod bool) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return fmt.Errorf("queue system is currently disabled")
+	}
 
 	// Check if user is already in queue
 	for _, user := range q.users {
@@ -100,4 +129,47 @@ func (q *Queue) Position(username string) int {
 		}
 	}
 	return -1
+}
+
+// AddAtPosition adds a user to the queue at the specified position (1-based)
+func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return fmt.Errorf("queue system is currently disabled")
+	}
+
+	// Check if user is already in queue
+	for _, user := range q.users {
+		if user.Username == username {
+			return fmt.Errorf("user is already in queue")
+		}
+	}
+
+	// Validate position
+	if position < 1 {
+		position = 1
+	}
+	if position > len(q.users)+1 {
+		position = len(q.users) + 1
+	}
+
+	// Create new user
+	newUser := QueuedUser{
+		Username: username,
+		JoinTime: time.Now(),
+		IsMod:    isMod,
+	}
+
+	// Insert at position (converting from 1-based to 0-based index)
+	position--
+	if position == len(q.users) {
+		// Append to end
+		q.users = append(q.users, newUser)
+	} else {
+		// Insert at position
+		q.users = append(q.users[:position], append([]QueuedUser{newUser}, q.users[position:]...)...)
+	}
+	return nil
 }
