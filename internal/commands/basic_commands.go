@@ -37,7 +37,19 @@ func RegisterBasicCommands(cm *CommandManager) {
 		Name:        "queue",
 		Description: "Shows the current queue status",
 		Handler: func(message twitch.PrivateMessage) string {
-			return "Queue system coming soon!"
+			queue := cm.GetQueue()
+			users := queue.List()
+
+			if len(users) == 0 {
+				return "The queue is currently empty."
+			}
+
+			var userList []string
+			for i, user := range users {
+				userList = append(userList, fmt.Sprintf("%d. %s", i+1, user.Username))
+			}
+
+			return fmt.Sprintf("Current queue (%d): %s", len(users), strings.Join(userList, ", "))
 		},
 	})
 
@@ -46,7 +58,16 @@ func RegisterBasicCommands(cm *CommandManager) {
 		Name:        "join",
 		Description: "Join the queue",
 		Handler: func(message twitch.PrivateMessage) string {
-			return fmt.Sprintf("@%s, queue joining will be implemented soon!", message.User.Name)
+			queue := cm.GetQueue()
+			isMod := message.User.Badges["moderator"] > 0 || message.User.Badges["broadcaster"] > 0
+			err := queue.Add(message.User.Name, isMod)
+
+			if err != nil {
+				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			}
+
+			position := queue.Position(message.User.Name)
+			return fmt.Sprintf("@%s has joined the queue at position %d!", message.User.Name, position)
 		},
 	})
 
@@ -55,7 +76,39 @@ func RegisterBasicCommands(cm *CommandManager) {
 		Name:        "leave",
 		Description: "Leave the queue",
 		Handler: func(message twitch.PrivateMessage) string {
-			return fmt.Sprintf("@%s, queue leaving will be implemented soon!", message.User.Name)
+			queue := cm.GetQueue()
+			if queue.Remove(message.User.Name) {
+				return fmt.Sprintf("@%s has left the queue!", message.User.Name)
+			}
+			return fmt.Sprintf("@%s, you are not in the queue!", message.User.Name)
+		},
+	})
+
+	// Clear command (mod only)
+	cm.RegisterCommand(Command{
+		Name:        "clearqueue",
+		Description: "Clear the entire queue (Mods only)",
+		ModOnly:     true,
+		Handler: func(message twitch.PrivateMessage) string {
+			queue := cm.GetQueue()
+			count := queue.Clear()
+			return fmt.Sprintf("@%s cleared the queue! Removed %d user(s).", message.User.Name, count)
+		},
+	})
+
+	// Position command
+	cm.RegisterCommand(Command{
+		Name:        "position",
+		Description: "Check your position in the queue",
+		Handler: func(message twitch.PrivateMessage) string {
+			queue := cm.GetQueue()
+			position := queue.Position(message.User.Name)
+
+			if position == -1 {
+				return fmt.Sprintf("@%s, you are not in the queue!", message.User.Name)
+			}
+
+			return fmt.Sprintf("@%s, you are at position %d in the queue!", message.User.Name, position)
 		},
 	})
 }
