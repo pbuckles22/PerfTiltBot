@@ -38,6 +38,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 				"position":   true,
 				"endqueue":   true,
 				"clearqueue": true,
+				"remove":     true,
 			}
 
 			// Build the list of commands to display
@@ -225,6 +226,42 @@ func RegisterBasicCommands(cm *CommandManager) {
 					return fmt.Sprintf("@%s has removed %s from the queue!", message.User.Name, targetUser)
 				}
 				return fmt.Sprintf("@%s has left the queue!", targetUser)
+			}
+			return fmt.Sprintf("@%s, %s is not in the queue!", message.User.Name, targetUser)
+		},
+	})
+
+	// Remove command - Removes a user from the queue (mod/VIP only)
+	cm.RegisterCommand(Command{
+		Name:        "remove",
+		Aliases:     []string{"rm"},
+		Description: "Remove a user from the queue (Mods/VIPs only)",
+		ModOnly:     false, // We'll do our own privilege check to include VIPs
+		Handler: func(message twitch.PrivateMessage) string {
+			queue := cm.GetQueue()
+
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+
+			// Check if user is privileged (Mod, VIP, or Broadcaster)
+			if !isPrivileged(message) {
+				return "This command can only be used by moderators and VIPs."
+			}
+
+			parts := strings.Fields(message.Message)
+			if len(parts) < 2 {
+				return fmt.Sprintf("@%s, please specify a user to remove: !remove <username>", message.User.Name)
+			}
+
+			// Get target user to remove
+			targetUser := strings.TrimPrefix(parts[1], "@")
+
+			// Get their position before removing them
+			position := queue.Position(targetUser)
+
+			if queue.Remove(targetUser) {
+				return fmt.Sprintf("@%s has removed %s from position %d in the queue!", message.User.Name, targetUser, position)
 			}
 			return fmt.Sprintf("@%s, %s is not in the queue!", message.User.Name, targetUser)
 		},
