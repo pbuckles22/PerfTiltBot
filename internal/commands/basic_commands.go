@@ -347,4 +347,41 @@ func RegisterBasicCommands(cm *CommandManager) {
 			}
 		},
 	})
+
+	// Move command - Moves a specified user to a new position in the queue (Mods/VIPs only)
+	cm.RegisterCommand(Command{
+		Name:        "move",
+		Description: "Move a specified user to a new position in the queue (Mods/VIPs only)",
+		ModOnly:     false,
+		Handler: func(message twitch.PrivateMessage) string {
+			// Check if user is privileged (Mod, VIP, or Broadcaster)
+			if !isPrivileged(message) {
+				return "This command can only be used by moderators and VIPs."
+			}
+
+			args := strings.Fields(message.Message)
+			if len(args) < 3 {
+				return "Usage: !move <username> <position>"
+			}
+
+			username := args[1]
+			position, err := strconv.Atoi(args[2])
+			if err != nil {
+				return "Invalid position number provided."
+			}
+
+			queue := cm.GetQueue()
+
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+
+			err = queue.MoveUser(username, position)
+			if err != nil {
+				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			}
+
+			return fmt.Sprintf("@%s has been moved to position %d in the queue!", username, position)
+		},
+	})
 }

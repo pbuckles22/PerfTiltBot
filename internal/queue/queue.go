@@ -215,3 +215,50 @@ func (q *Queue) RemoveUser(username string) (bool, error) {
 
 	return false, nil
 }
+
+// MoveUser moves a specified user to a new position in the queue
+func (q *Queue) MoveUser(username string, newPosition int) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return fmt.Errorf("queue system is currently disabled")
+	}
+
+	// Validate new position
+	if newPosition < 1 {
+		newPosition = 1
+	}
+	if newPosition > len(q.users) {
+		newPosition = len(q.users)
+	}
+
+	// Find the user's current position
+	currentIndex := -1
+	for i, user := range q.users {
+		if user.Username == username {
+			currentIndex = i
+			break
+		}
+	}
+
+	if currentIndex == -1 {
+		return fmt.Errorf("user is not in the queue")
+	}
+
+	// Remove the user from their current position
+	user := q.users[currentIndex]
+	q.users = append(q.users[:currentIndex], q.users[currentIndex+1:]...)
+
+	// Insert the user at the new position (converting from 1-based to 0-based index)
+	newIndex := newPosition - 1
+	if newIndex == len(q.users) {
+		// Append to end
+		q.users = append(q.users, user)
+	} else {
+		// Insert at position
+		q.users = append(q.users[:newIndex], append([]QueuedUser{user}, q.users[newIndex:]...)...)
+	}
+
+	return nil
+}
