@@ -232,8 +232,8 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 	// Clear command - Removes all users from the queue (mod only)
 	cm.RegisterCommand(Command{
-		Name:        "clearline",
-		Aliases:     []string{"cl"},
+		Name:        "clearqueue",
+		Aliases:     []string{"cq"},
 		Description: "Clear the entire queue (Mods only)",
 		ModOnly:     true,
 		Handler: func(message twitch.PrivateMessage) string {
@@ -282,6 +282,32 @@ func RegisterBasicCommands(cm *CommandManager) {
 			// Signal that we want to shut down
 			cm.RequestShutdown()
 			return fmt.Sprintf("@%s has initiated bot shutdown. Goodbye! 👋", message.User.Name)
+		},
+	})
+
+	// Pop command - Removes the first user from the queue (mod only)
+	cm.RegisterCommand(Command{
+		Name:        "pop",
+		Description: "Remove the first user from the queue (Mods/VIPs only)",
+		ModOnly:     false,
+		Handler: func(message twitch.PrivateMessage) string {
+			// Check if user is privileged (Mod, VIP, or Broadcaster)
+			if !isPrivileged(message) {
+				return "This command can only be used by moderators and VIPs."
+			}
+
+			queue := cm.GetQueue()
+
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+
+			user, err := queue.Pop()
+			if err != nil {
+				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			}
+
+			return fmt.Sprintf("@%s has been removed from the front of the queue!", user.Username)
 		},
 	})
 }
