@@ -4,8 +4,9 @@
 - [ ] Add `!remove <user>` command to remove specific user from queue
 - [ ] Add `!pop` command to remove first position in queue
 - [ ] Implement queue state persistence (save/load queue state in case bot dies)
-- [ ] Add `!move` command for repositioning users in queue
+- [ ] Add `!move <user> <position>` command to move user to specific position in queue
 - [ ] Fix help command not showing queue commands when enabled
+- [ ] Make username matching case-insensitive (e.g., @UserName should match "username" in queue)
 
 ## UI/UX
 - [ ] Improve message formatting for queue-related responses

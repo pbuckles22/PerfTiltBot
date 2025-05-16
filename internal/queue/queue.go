@@ -2,15 +2,17 @@ package queue
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
 
 // QueuedUser represents a user in the queue
 type QueuedUser struct {
-	Username string
-	JoinTime time.Time
-	IsMod    bool
+	Username  string // Original display name
+	LowerName string // Lowercase version for matching
+	JoinTime  time.Time
+	IsMod     bool
 }
 
 // Queue manages the user queue
@@ -70,17 +72,19 @@ func (q *Queue) Add(username string, isMod bool) error {
 		return fmt.Errorf("queue system is currently disabled")
 	}
 
+	lowerName := strings.ToLower(username)
 	// Check if user is already in queue
 	for _, user := range q.users {
-		if user.Username == username {
+		if user.LowerName == lowerName {
 			return fmt.Errorf("user is already in queue")
 		}
 	}
 
 	q.users = append(q.users, QueuedUser{
-		Username: username,
-		JoinTime: time.Now(),
-		IsMod:    isMod,
+		Username:  username,  // Preserve original display name
+		LowerName: lowerName, // Store lowercase for matching
+		JoinTime:  time.Now(),
+		IsMod:     isMod,
 	})
 	return nil
 }
@@ -90,8 +94,9 @@ func (q *Queue) Remove(username string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	lowerName := strings.ToLower(username)
 	for i, user := range q.users {
-		if user.Username == username {
+		if user.LowerName == lowerName {
 			// Remove user by slicing
 			q.users = append(q.users[:i], q.users[i+1:]...)
 			return true
@@ -123,8 +128,9 @@ func (q *Queue) Position(username string) int {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
+	lowerName := strings.ToLower(username)
 	for i, user := range q.users {
-		if user.Username == username {
+		if user.LowerName == lowerName {
 			return i + 1
 		}
 	}
@@ -140,9 +146,10 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 		return fmt.Errorf("queue system is currently disabled")
 	}
 
+	lowerName := strings.ToLower(username)
 	// Check if user is already in queue
 	for _, user := range q.users {
-		if user.Username == username {
+		if user.LowerName == lowerName {
 			return fmt.Errorf("user is already in queue")
 		}
 	}
@@ -157,9 +164,10 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 
 	// Create new user
 	newUser := QueuedUser{
-		Username: username,
-		JoinTime: time.Now(),
-		IsMod:    isMod,
+		Username:  username,  // Preserve original display name
+		LowerName: lowerName, // Store lowercase for matching
+		JoinTime:  time.Now(),
+		IsMod:     isMod,
 	}
 
 	// Insert at position (converting from 1-based to 0-based index)
