@@ -310,4 +310,41 @@ func RegisterBasicCommands(cm *CommandManager) {
 			return fmt.Sprintf("@%s has been removed from the front of the queue!", user.Username)
 		},
 	})
+
+	// Remove command - Removes a specified user from the queue (Mods/VIPs only)
+	cm.RegisterCommand(Command{
+		Name:        "remove",
+		Aliases:     []string{"rm"},
+		Description: "Remove a specified user from the queue (Mods/VIPs only)",
+		ModOnly:     false,
+		Handler: func(message twitch.PrivateMessage) string {
+			// Check if user is privileged (Mod, VIP, or Broadcaster)
+			if !isPrivileged(message) {
+				return "This command can only be used by moderators and VIPs."
+			}
+
+			args := strings.Fields(message.Message)
+			if len(args) < 2 {
+				return "Usage: !remove <username>"
+			}
+
+			username := args[1]
+			queue := cm.GetQueue()
+
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+
+			removed, err := queue.RemoveUser(username)
+			if err != nil {
+				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			}
+
+			if removed {
+				return fmt.Sprintf("@%s has been removed from the queue!", username)
+			} else {
+				return fmt.Sprintf("@%s is not in the queue.", username)
+			}
+		},
+	})
 }

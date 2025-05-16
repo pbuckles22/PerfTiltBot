@@ -195,3 +195,23 @@ func (q *Queue) Pop() (*QueuedUser, error) {
 
 	return &user, nil
 }
+
+// RemoveUser removes a specified user from the queue
+func (q *Queue) RemoveUser(username string) (bool, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return false, fmt.Errorf("queue system is currently disabled")
+	}
+
+	for i, user := range q.users {
+		if user.Username == username {
+			// Remove the user from the queue
+			q.users = append(q.users[:i], q.users[i+1:]...)
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
