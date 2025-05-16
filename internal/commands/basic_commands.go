@@ -39,6 +39,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 				"endqueue":   true,
 				"clearqueue": true,
 				"remove":     true,
+				"pop":        true,
 			}
 
 			// Build the list of commands to display
@@ -319,6 +320,27 @@ func RegisterBasicCommands(cm *CommandManager) {
 			// Signal that we want to shut down
 			cm.RequestShutdown()
 			return fmt.Sprintf("@%s has initiated bot shutdown. Goodbye! 👋", message.User.Name)
+		},
+	})
+
+	// Pop command - Removes the first user from the queue (mod only)
+	cm.RegisterCommand(Command{
+		Name:        "pop",
+		Description: "Remove the first user from the queue (Mods only)",
+		ModOnly:     true,
+		Handler: func(message twitch.PrivateMessage) string {
+			queue := cm.GetQueue()
+
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+
+			user, err := queue.Pop()
+			if err != nil {
+				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			}
+
+			return fmt.Sprintf("@%s has removed %s from the front of the queue!", message.User.Name, user.Username)
 		},
 	})
 }

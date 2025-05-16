@@ -181,3 +181,22 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 	}
 	return nil
 }
+
+// Pop removes and returns the first user from the queue
+func (q *Queue) Pop() (*QueuedUser, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return nil, fmt.Errorf("queue system is currently disabled")
+	}
+
+	if len(q.users) == 0 {
+		return nil, fmt.Errorf("queue is empty")
+	}
+
+	// Get first user and remove them
+	user := q.users[0]
+	q.users = q.users[1:]
+	return &user, nil
+}
