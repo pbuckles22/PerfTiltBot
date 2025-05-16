@@ -1,7 +1,10 @@
 package queue
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -9,25 +12,127 @@ import (
 
 // QueuedUser represents a user in the queue
 type QueuedUser struct {
-	Username  string // Original display name
-	LowerName string // Lowercase version for matching
-	JoinTime  time.Time
-	IsMod     bool
+	Username  string    `json:"username"`  // Original display name
+	LowerName string    `json:"lowerName"` // Lowercase version for matching
+	JoinTime  time.Time `json:"joinTime"`
+	IsMod     bool      `json:"isMod"`
+}
+
+// QueueState represents the saved state of the queue
+type QueueState struct {
+	Enabled bool         `json:"enabled"`
+	Users   []QueuedUser `json:"users"`
 }
 
 // Queue manages the user queue
 type Queue struct {
-	users   []QueuedUser
-	enabled bool
-	mu      sync.RWMutex
+	users      []QueuedUser
+	enabled    bool
+	mu         sync.RWMutex
+	stateFile  string
+	saveTicker *time.Ticker
+	done       chan bool
 }
 
 // NewQueue creates a new queue manager
-func NewQueue() *Queue {
-	return &Queue{
-		users:   make([]QueuedUser, 0),
-		enabled: false,
+func NewQueue(stateFile string) *Queue {
+	q := &Queue{
+		users:     make([]QueuedUser, 0),
+		enabled:   false,
+		stateFile: stateFile,
+		done:      make(chan bool),
 	}
+
+	// Try to load existing state
+	if err := q.loadState(); err != nil {
+		fmt.Printf("Warning: Could not load queue state: %v\n", err)
+	}
+
+	// Start periodic save
+	q.startPeriodicSave()
+
+	return q
+}
+
+// startPeriodicSave starts a goroutine to periodically save the queue state
+func (q *Queue) startPeriodicSave() {
+	q.saveTicker = time.NewTicker(1 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-q.saveTicker.C:
+				if err := q.saveState(); err != nil {
+					fmt.Printf("Error saving queue state: %v\n", err)
+				}
+			case <-q.done:
+				q.saveTicker.Stop()
+				return
+			}
+		}
+	}()
+}
+
+// saveState saves the current queue state to a file
+func (q *Queue) saveState() error {
+	q.mu.RLock()
+	state := QueueState{
+		Enabled: q.enabled,
+		Users:   q.users,
+	}
+	q.mu.RUnlock()
+
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(q.stateFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create state directory: %v", err)
+	}
+
+	// Marshal state to JSON
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal queue state: %v", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(q.stateFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write queue state: %v", err)
+	}
+
+	return nil
+}
+
+// loadState loads the queue state from a file
+func (q *Queue) loadState() error {
+	// Check if file exists
+	if _, err := os.Stat(q.stateFile); os.IsNotExist(err) {
+		return nil // No state file, start fresh
+	}
+
+	// Read file
+	data, err := os.ReadFile(q.stateFile)
+	if err != nil {
+		return fmt.Errorf("failed to read queue state: %v", err)
+	}
+
+	// Unmarshal JSON
+	var state QueueState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return fmt.Errorf("failed to unmarshal queue state: %v", err)
+	}
+
+	// Update queue
+	q.mu.Lock()
+	q.enabled = state.Enabled
+	q.users = state.Users
+	q.mu.Unlock()
+
+	return nil
+}
+
+// Close stops the periodic save and saves the final state
+func (q *Queue) Close() error {
+	q.done <- true
+	return q.saveState()
 }
 
 // Enable starts the queue system
@@ -36,6 +141,11 @@ func (q *Queue) Enable() {
 	defer q.mu.Unlock()
 	q.enabled = true
 	q.users = make([]QueuedUser, 0) // Clear queue when enabling
+
+	// Save state after enabling
+	if err := q.saveState(); err != nil {
+		fmt.Printf("Warning: Failed to save queue state after enabling: %v\n", err)
+	}
 }
 
 // Disable stops the queue system and clears the queue
@@ -44,6 +154,11 @@ func (q *Queue) Disable() {
 	defer q.mu.Unlock()
 	q.enabled = false
 	q.users = make([]QueuedUser, 0)
+
+	// Save state after disabling
+	if err := q.saveState(); err != nil {
+		fmt.Printf("Warning: Failed to save queue state after disabling: %v\n", err)
+	}
 }
 
 // IsEnabled returns whether the queue system is enabled
@@ -60,6 +175,11 @@ func (q *Queue) Clear() int {
 
 	count := len(q.users)
 	q.users = make([]QueuedUser, 0)
+
+	// Save state after clearing queue
+	if err := q.saveState(); err != nil {
+		fmt.Printf("Warning: Failed to save queue state after clearing queue: %v\n", err)
+	}
 	return count
 }
 
@@ -86,6 +206,11 @@ func (q *Queue) Add(username string, isMod bool) error {
 		JoinTime:  time.Now(),
 		IsMod:     isMod,
 	})
+
+	// Save state after adding user
+	if err := q.saveState(); err != nil {
+		fmt.Printf("Warning: Failed to save queue state after adding user: %v\n", err)
+	}
 	return nil
 }
 
@@ -99,6 +224,11 @@ func (q *Queue) Remove(username string) bool {
 		if user.LowerName == lowerName {
 			// Remove user by slicing
 			q.users = append(q.users[:i], q.users[i+1:]...)
+
+			// Save state after removing user
+			if err := q.saveState(); err != nil {
+				fmt.Printf("Warning: Failed to save queue state after removing user: %v\n", err)
+			}
 			return true
 		}
 	}
@@ -179,6 +309,11 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 		// Insert at position
 		q.users = append(q.users[:position], append([]QueuedUser{newUser}, q.users[position:]...)...)
 	}
+
+	// Save state after adding user at position
+	if err := q.saveState(); err != nil {
+		fmt.Printf("Warning: Failed to save queue state after adding user at position: %v\n", err)
+	}
 	return nil
 }
 
@@ -198,5 +333,10 @@ func (q *Queue) Pop() (*QueuedUser, error) {
 	// Get first user and remove them
 	user := q.users[0]
 	q.users = q.users[1:]
+
+	// Save state after popping user
+	if err := q.saveState(); err != nil {
+		fmt.Printf("Warning: Failed to save queue state after popping user: %v\n", err)
+	}
 	return &user, nil
 }

@@ -1,6 +1,9 @@
 package commands
 
 import (
+	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -44,10 +47,19 @@ type CommandManager struct {
 // NewCommandManager creates and initializes a new command manager.
 // The prefix parameter determines what character must precede commands (e.g., "!").
 func NewCommandManager(prefix string) *CommandManager {
+	// Create data directory if it doesn't exist
+	dataDir := "data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create data directory: %v", err)
+	}
+
+	// Initialize queue with state file
+	queue := queue.NewQueue(filepath.Join(dataDir, "queue_state.json"))
+
 	return &CommandManager{
 		commands:   make(map[string]Command),
 		prefix:     prefix,
-		queue:      queue.NewQueue(),
+		queue:      queue,
 		shutdownCh: make(chan struct{}),
 	}
 }

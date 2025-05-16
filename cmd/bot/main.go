@@ -161,6 +161,11 @@ func main() {
 	// Graceful shutdown
 	log.Println("Shutting down gracefully...")
 
+	// Save queue state
+	if err := cmdManager.GetQueue().Close(); err != nil {
+		log.Printf("Warning: Failed to save queue state during shutdown: %v", err)
+	}
+
 	// Send a part message before disconnecting
 	log.Printf("Leaving channel: %s", secrets.Twitch.Channel)
 	client.Depart(secrets.Twitch.Channel)
