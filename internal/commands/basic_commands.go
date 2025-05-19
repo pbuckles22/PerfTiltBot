@@ -16,6 +16,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 	// When queue is enabled: Shows both basic and queue commands
 	cm.RegisterCommand(Command{
 		Name:        "help",
+		Aliases:     []string{"h"},
 		Description: "Shows the list of available commands",
 		Handler: func(message twitch.PrivateMessage) string {
 			queue := cm.GetQueue()
@@ -139,6 +140,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 	// Mods/VIPs can add others and specify positions
 	cm.RegisterCommand(Command{
 		Name:        "join",
+		Aliases:     []string{"j"},
 		Description: "Join the queue. Mods/VIPs can add others with !join [username] or !join [username] [position]",
 		Handler: func(message twitch.PrivateMessage) string {
 			queue := cm.GetQueue()
@@ -272,6 +274,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 	// Leave command - Removes a user from the queue
 	cm.RegisterCommand(Command{
 		Name:        "leave",
+		Aliases:     []string{"l"},
 		Description: "Leave the queue. Mods/VIPs can remove others with !leave [username]",
 		Handler: func(message twitch.PrivateMessage) string {
 			queue := cm.GetQueue()
