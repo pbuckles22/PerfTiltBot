@@ -608,7 +608,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 	// Add savequeue command
 	cm.RegisterCommand(Command{
 		Name:        "savequeue",
-		Aliases:     []string{"sq"},
+		Aliases:     []string{"svq"},
 		Description: "Save the current queue state to a file (Mods/VIPs only)",
 		Handler: func(message twitch.PrivateMessage) string {
 			if !isPrivileged(message) {
