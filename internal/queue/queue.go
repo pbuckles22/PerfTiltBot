@@ -17,6 +17,7 @@ type QueuedUser struct {
 type Queue struct {
 	users   []QueuedUser
 	enabled bool
+	paused  bool
 	mu      sync.RWMutex
 }
 
@@ -25,6 +26,7 @@ func NewQueue() *Queue {
 	return &Queue{
 		users:   make([]QueuedUser, 0),
 		enabled: false,
+		paused:  false,
 	}
 }
 
@@ -33,6 +35,7 @@ func (q *Queue) Enable() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.enabled = true
+	q.paused = false
 	q.users = make([]QueuedUser, 0) // Clear queue when enabling
 }
 
@@ -41,7 +44,49 @@ func (q *Queue) Disable() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.enabled = false
+	q.paused = false
 	q.users = make([]QueuedUser, 0)
+}
+
+// Pause pauses the queue system (no new additions allowed)
+func (q *Queue) Pause() error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return fmt.Errorf("queue system is currently disabled")
+	}
+
+	if q.paused {
+		return fmt.Errorf("queue system is already paused")
+	}
+
+	q.paused = true
+	return nil
+}
+
+// Unpause resumes the queue system
+func (q *Queue) Unpause() error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return fmt.Errorf("queue system is currently disabled")
+	}
+
+	if !q.paused {
+		return fmt.Errorf("queue system is not paused")
+	}
+
+	q.paused = false
+	return nil
+}
+
+// IsPaused returns whether the queue system is paused
+func (q *Queue) IsPaused() bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.paused
 }
 
 // IsEnabled returns whether the queue system is enabled
@@ -68,6 +113,10 @@ func (q *Queue) Add(username string, isMod bool) error {
 
 	if !q.enabled {
 		return fmt.Errorf("queue system is currently disabled")
+	}
+
+	if q.paused && !isMod {
+		return fmt.Errorf("queue system is currently paused")
 	}
 
 	// Check if user is already in queue
@@ -138,6 +187,10 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 
 	if !q.enabled {
 		return fmt.Errorf("queue system is currently disabled")
+	}
+
+	if q.paused && !isMod {
+		return fmt.Errorf("queue system is currently paused")
 	}
 
 	// Check if user is already in queue
