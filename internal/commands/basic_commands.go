@@ -15,11 +15,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 	// Help command - Shows available commands based on queue state
 	// When queue is disabled: Shows only basic commands
 	// When queue is enabled: Shows both basic and queue commands
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "help",
 		Aliases:     []string{"h"},
 		Description: "Shows the list of available commands",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 			commands := cm.GetCommandList()
 			var commandList []string
@@ -69,22 +69,22 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Ping command - Simple bot health check
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "ping",
 		Description: "Check if the bot is running",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			return "Pong! 🏓"
 		},
 	})
 
 	// Start Queue command - Enables the queue system (mod/VIP only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:         "startqueue",
 		Aliases:      []string{"sq"},
 		Description:  "Start the queue system (Mods/VIPs only)",
 		ModOnly:      false,
 		IsPrivileged: true,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 			if queue.IsEnabled() {
 				return "Queue system is already running!"
@@ -95,13 +95,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// End Queue command - Disables and clears the queue (mod/VIP only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:         "endqueue",
 		Aliases:      []string{"eq"},
 		Description:  "End the queue system and clear the queue (Mods/VIPs only)",
 		ModOnly:      false,
 		IsPrivileged: true,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 			if !queue.IsEnabled() {
 				return "Queue system is already disabled!"
@@ -112,11 +112,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Queue command - Shows current queue status
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "queue",
 		Aliases:     []string{"q"},
 		Description: "Shows the current queue status",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 
 			if !queue.IsEnabled() {
@@ -141,18 +141,18 @@ func RegisterBasicCommands(cm *CommandManager) {
 	// Join command - Adds a user to the queue
 	// Regular users can only add themselves
 	// Mods/VIPs can add others and specify positions
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "join",
 		Aliases:     []string{"j"},
 		Description: "Join the queue. Mods/VIPs can add others with !join [username] or !join [username] [position]",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 
 			if !queue.IsEnabled() {
 				return "The queue system is currently disabled."
 			}
 
-			parts := strings.Fields(message.Message)
+			parts := args
 
 			// Handle regular users (can only add themselves)
 			if !isPrivileged(message) {
@@ -165,7 +165,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 			}
 
 			// Handle privileged users (mods/VIPs)
-			if len(parts) < 2 {
+			if len(parts) < 1 {
 				// No target specified, add themselves
 				err := queue.Add(message.User.Name, true)
 				if err != nil {
@@ -183,7 +183,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 			hasPosition := err == nil
 
 			// Get all usernames (excluding position if present)
-			usernames := parts[1:]
+			usernames := parts
 			if hasPosition {
 				usernames = usernames[:len(usernames)-1]
 			}
@@ -275,18 +275,18 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Leave command - Removes a user from the queue
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "leave",
 		Aliases:     []string{"l"},
 		Description: "Leave the queue. Mods/VIPs can remove others with !leave [username]",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 
 			if !queue.IsEnabled() {
 				return "The queue system is currently disabled."
 			}
 
-			parts := strings.Fields(message.Message)
+			parts := args
 
 			var targetUser string
 			if len(parts) > 1 && isPrivileged(message) {
@@ -308,13 +308,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Clear command - Removes all users from the queue (mod/VIP only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:         "clearqueue",
 		Aliases:      []string{"cq"},
 		Description:  "Clear the entire queue (Mods/VIPs only)",
 		ModOnly:      false,
 		IsPrivileged: true,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 
 			if !queue.IsEnabled() {
@@ -327,11 +327,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Position command - Shows a user's position in queue
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "position",
 		Aliases:     []string{"pos"},
 		Description: "Check your position in the queue",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 
 			if !queue.IsEnabled() {
@@ -347,12 +347,12 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Kill command - Safely shuts down the bot (mod/VIP only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:         "kill",
 		Description:  "Safely shut down the bot (Mods/VIPs only)",
 		ModOnly:      false,
 		IsPrivileged: true,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			// Check if user is privileged (Mod, VIP, or Broadcaster)
 			if !isPrivileged(message) {
 				return "This command can only be used by moderators and VIPs."
@@ -365,11 +365,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Pop command - Removes users from the front of the queue (mod only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "pop",
 		Description: "Remove users from the front of the queue (Mods/VIPs only). Usage: !pop [count]",
 		ModOnly:     false,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			// Check if user is privileged (Mod, VIP, or Broadcaster)
 			if !isPrivileged(message) {
 				return "This command can only be used by moderators and VIPs."
@@ -383,10 +383,9 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 			// Parse count from message if provided
 			count := 1 // Default to 1 if no count specified
-			parts := strings.Fields(message.Message)
-			if len(parts) > 1 {
+			if len(args) > 1 {
 				var err error
-				count, err = strconv.Atoi(parts[1])
+				count, err = strconv.Atoi(args[1])
 				if err != nil || count < 1 {
 					return "Invalid count provided. Please specify a positive number."
 				}
@@ -412,18 +411,17 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Remove command - Removes a specified user from the queue (Mods/VIPs only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "remove",
 		Aliases:     []string{"rm"},
 		Description: "Remove specified users or positions from the queue (Mods/VIPs only). Usage: !remove [username1] [username2] ... or !remove [position1] [position2] ...",
 		ModOnly:     false,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			// Check if user is privileged (Mod, VIP, or Broadcaster)
 			if !isPrivileged(message) {
 				return "This command can only be used by moderators and VIPs."
 			}
 
-			args := strings.Fields(message.Message)
 			if len(args) < 2 {
 				return "Usage: !remove <username1> [username2] ... or !remove <position1> [position2] ..."
 			}
@@ -518,12 +516,12 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Move command - Moves a specified user to a new position in the queue (Mods/VIPs only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "move",
 		Aliases:     []string{"mv"},
 		Description: "Move a specified user to a new position in the queue (Mods/VIPs only). If position is beyond queue length, user will be moved to the end.",
 		ModOnly:     false,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 
 			if !queue.IsEnabled() {
@@ -535,7 +533,6 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return "This command can only be used by moderators and VIPs."
 			}
 
-			args := strings.Fields(message.Message)
 			if len(args) < 3 {
 				return "Usage: !move <username> <position>"
 			}
@@ -565,13 +562,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Pause Queue command - Pauses the queue system (mod/VIP only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:         "pausequeue",
 		Aliases:      []string{"pq"},
 		Description:  "Pause the queue system (no new additions allowed) (Mods/VIPs only)",
 		ModOnly:      false,
 		IsPrivileged: true,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 			if !queue.IsEnabled() {
 				return "The queue system is currently disabled."
@@ -588,13 +585,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Unpause Queue command - Resumes the queue system (mod/VIP only)
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:         "unpausequeue",
 		Aliases:      []string{"uq"},
 		Description:  "Resume the queue system (Mods/VIPs only)",
 		ModOnly:      false,
 		IsPrivileged: true,
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			queue := cm.GetQueue()
 			if !queue.IsEnabled() {
 				return "The queue system is currently disabled."
@@ -611,11 +608,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Add savequeue command
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "savequeue",
 		Aliases:     []string{"svq"},
 		Description: "Save the current queue state to a file (Mods/VIPs only)",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			if !isPrivileged(message) {
 				return "Only moderators and VIPs can save the queue state."
 			}
@@ -632,11 +629,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Add restorequeue command
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "restorequeue",
 		Aliases:     []string{"rq"},
 		Description: "Restore the queue state from a saved file (Mods/VIPs only)",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			if !isPrivileged(message) {
 				return "Only moderators and VIPs can restore the queue state."
 			}
@@ -653,11 +650,11 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	// Add deletequeue command
-	cm.RegisterCommand(Command{
+	cm.RegisterCommand(&Command{
 		Name:        "deletequeue",
 		Aliases:     []string{"dq"},
 		Description: "Delete the saved queue state file (Mods/VIPs only)",
-		Handler: func(message twitch.PrivateMessage) string {
+		Handler: func(message twitch.PrivateMessage, args []string) string {
 			if !isPrivileged(message) {
 				return "Only moderators and VIPs can delete the saved queue state."
 			}

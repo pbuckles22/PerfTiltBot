@@ -21,19 +21,19 @@ type TokenResponse struct {
 
 // AuthManager handles Twitch OAuth token management
 type AuthManager struct {
-	ClientID     string
-	ClientSecret string
-	RefreshToken string
-	AccessToken  string
-	ExpiresAt    time.Time
+	ClientID          string
+	ClientSecret      string
+	RefreshTokenValue string
+	AccessToken       string
+	ExpiresAt         time.Time
 }
 
 // NewAuthManager creates a new Twitch authentication manager
 func NewAuthManager(clientID, clientSecret, refreshToken string) *AuthManager {
 	return &AuthManager{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		RefreshToken: refreshToken,
+		ClientID:          clientID,
+		ClientSecret:      clientSecret,
+		RefreshTokenValue: refreshToken,
 	}
 }
 
@@ -41,7 +41,7 @@ func NewAuthManager(clientID, clientSecret, refreshToken string) *AuthManager {
 func (am *AuthManager) RefreshToken() error {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", am.RefreshToken)
+	data.Set("refresh_token", am.RefreshTokenValue)
 	data.Set("client_id", am.ClientID)
 	data.Set("client_secret", am.ClientSecret)
 
@@ -70,7 +70,7 @@ func (am *AuthManager) RefreshToken() error {
 	}
 
 	am.AccessToken = tokenResp.AccessToken
-	am.RefreshToken = tokenResp.RefreshToken
+	am.RefreshTokenValue = tokenResp.RefreshToken
 	am.ExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 
 	return nil
