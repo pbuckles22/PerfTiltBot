@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -642,6 +643,29 @@ func RegisterBasicCommands(cm *CommandManager) {
 			}
 
 			return "Queue state has been restored successfully!"
+		},
+		ModOnly:      false,
+		IsPrivileged: true,
+	})
+
+	// Add deletequeue command
+	cm.RegisterCommand(Command{
+		Name:        "deletequeue",
+		Aliases:     []string{"dq"},
+		Description: "Delete the saved queue state file (Mods/VIPs only)",
+		Handler: func(message twitch.PrivateMessage) string {
+			if !isPrivileged(message) {
+				return "Only moderators and VIPs can delete the saved queue state."
+			}
+
+			if err := os.Remove("queue_state.json"); err != nil {
+				if os.IsNotExist(err) {
+					return "No saved queue state exists to delete."
+				}
+				return fmt.Sprintf("Failed to delete saved queue state: %v", err)
+			}
+
+			return "Saved queue state has been deleted successfully!"
 		},
 		ModOnly:      false,
 		IsPrivileged: true,
