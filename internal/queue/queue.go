@@ -25,9 +25,9 @@ type Queue struct {
 
 // QueueState represents the serializable state of the queue
 type QueueState struct {
-	Enabled bool     `json:"enabled"`
-	Paused  bool     `json:"paused"`
-	Users   []string `json:"users"`
+	Enabled bool         `json:"enabled"`
+	Paused  bool         `json:"paused"`
+	Users   []QueuedUser `json:"users"`
 }
 
 // NewQueue creates a new queue manager
@@ -403,7 +403,7 @@ func (q *Queue) SaveState(filename string) error {
 	state := QueueState{
 		Enabled: q.enabled,
 		Paused:  q.paused,
-		Users:   make([]string, len(q.users)),
+		Users:   make([]QueuedUser, len(q.users)),
 	}
 	copy(state.Users, q.users)
 
