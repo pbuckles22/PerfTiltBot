@@ -427,6 +427,10 @@ func (q *Queue) LoadState(filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Don't enable the queue if there's no saved state
+			q.enabled = false
+			q.paused = false
+			q.users = make([]QueuedUser, 0)
 			return fmt.Errorf("no saved queue state found")
 		}
 		return fmt.Errorf("failed to read queue state: %w", err)
