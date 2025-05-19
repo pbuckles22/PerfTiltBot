@@ -196,6 +196,34 @@ func (q *Queue) Pop() (*QueuedUser, error) {
 	return &user, nil
 }
 
+// PopN removes and returns the first N users from the queue
+func (q *Queue) PopN(count int) ([]QueuedUser, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return nil, fmt.Errorf("queue system is currently disabled")
+	}
+
+	if len(q.users) == 0 {
+		return nil, fmt.Errorf("queue is empty")
+	}
+
+	// Ensure count doesn't exceed queue size
+	if count > len(q.users) {
+		count = len(q.users)
+	}
+
+	// Get first N users
+	users := make([]QueuedUser, count)
+	copy(users, q.users[:count])
+
+	// Remove first N users
+	q.users = q.users[count:]
+
+	return users, nil
+}
+
 // RemoveUser removes a specified user from the queue
 func (q *Queue) RemoveUser(username string) (bool, error) {
 	q.mu.Lock()

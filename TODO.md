@@ -4,6 +4,7 @@
 - [x] Add `!remove <user>` command to remove specific user from queue
 - [x] Make username matching case-insensitive (e.g., @UserName should match "username" in queue)
 - [x] Add `!pop` command to remove first position in queue
+- [ ] Enhance `!pop` command to support removing multiple users (e.g., `!pop 2` removes first two users)
 - [ ] Implement queue state persistence:
   - [ ] Add JSON serialization for queue state
   - [ ] Save state on queue changes (add/remove/move)
@@ -25,6 +26,11 @@
 - [ ] Add command usage statistics
 - [ ] Add automatic reconnection on disconnect
 - [ ] Add error reporting to logging service
+- [ ] Implement OAuth token refresh:
+  - [ ] Add refresh token handling
+  - [ ] Auto-refresh token before expiration
+  - [ ] Handle refresh token errors gracefully
+  - [ ] Add token refresh logging
 
 ## Permission System
 - [ ] Add more granular permission levels beyond Mod/VIP

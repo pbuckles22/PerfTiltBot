@@ -285,10 +285,10 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Pop command - Removes the first user from the queue (mod only)
+	// Pop command - Removes users from the front of the queue (mod only)
 	cm.RegisterCommand(Command{
 		Name:        "pop",
-		Description: "Remove the first user from the queue (Mods/VIPs only)",
+		Description: "Remove users from the front of the queue (Mods/VIPs only). Usage: !pop [count]",
 		ModOnly:     false,
 		Handler: func(message twitch.PrivateMessage) string {
 			// Check if user is privileged (Mod, VIP, or Broadcaster)
@@ -302,12 +302,33 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return "The queue system is currently disabled."
 			}
 
-			user, err := queue.Pop()
+			// Parse count from message if provided
+			count := 1 // Default to 1 if no count specified
+			parts := strings.Fields(message.Message)
+			if len(parts) > 1 {
+				var err error
+				count, err = strconv.Atoi(parts[1])
+				if err != nil || count < 1 {
+					return "Invalid count provided. Please specify a positive number."
+				}
+			}
+
+			// Pop N users from the queue
+			users, err := queue.PopN(count)
 			if err != nil {
 				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
 			}
 
-			return fmt.Sprintf("@%s has been removed from the front of the queue!", user.Username)
+			// Build response message
+			if len(users) == 1 {
+				return fmt.Sprintf("@%s has been removed from the front of the queue!", users[0].Username)
+			} else {
+				usernames := make([]string, len(users))
+				for i, user := range users {
+					usernames[i] = user.Username
+				}
+				return fmt.Sprintf("Removed %d users from the front of the queue: %s", len(users), strings.Join(usernames, ", "))
+			}
 		},
 	})
 
