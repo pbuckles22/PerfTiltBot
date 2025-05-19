@@ -143,8 +143,15 @@ func (cm *CommandManager) HandleMessage(message twitch.PrivateMessage) (response
 
 	// Check cooldown
 	if remaining := cm.cooldown.CheckCooldown(command.Name, message); remaining > 0 {
-		// Send cooldown message
-		return fmt.Sprintf("@%s, this command is on cooldown. Please wait %s.", message.User.Name, FormatCooldown(remaining)), true
+		// Only show cooldown message if we haven't shown it for this cooldown period
+		if cm.cooldown.ShouldShowCooldownMessage(command.Name, message) {
+			// Update the last message time
+			cm.cooldown.UpdateLastMessageTime(command.Name, message)
+			// Send cooldown message
+			return fmt.Sprintf("@%s, this command is on cooldown. Please wait %s.", message.User.Name, FormatCooldown(remaining)), true
+		}
+		// Don't show message, but still indicate this was a command attempt
+		return "", true
 	}
 
 	// Execute the command's handler and return its response

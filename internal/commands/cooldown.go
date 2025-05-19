@@ -43,14 +43,17 @@ type CooldownManager struct {
 	configs map[string]CooldownConfig
 	// Map of command names to user last usage times
 	lastUsage map[string]map[string]time.Time
-	mu        sync.RWMutex
+	// Map of command names to user last cooldown message times
+	lastMessage map[string]map[string]time.Time
+	mu          sync.RWMutex
 }
 
 // NewCooldownManager creates a new cooldown manager
 func NewCooldownManager() *CooldownManager {
 	return &CooldownManager{
-		configs:   make(map[string]CooldownConfig),
-		lastUsage: make(map[string]map[string]time.Time),
+		configs:     make(map[string]CooldownConfig),
+		lastUsage:   make(map[string]map[string]time.Time),
+		lastMessage: make(map[string]map[string]time.Time),
 	}
 }
 
@@ -62,6 +65,9 @@ func (cm *CooldownManager) SetCooldown(commandName string, config CooldownConfig
 	cm.configs[commandName] = config
 	if _, exists := cm.lastUsage[commandName]; !exists {
 		cm.lastUsage[commandName] = make(map[string]time.Time)
+	}
+	if _, exists := cm.lastMessage[commandName]; !exists {
+		cm.lastMessage[commandName] = make(map[string]time.Time)
 	}
 }
 
@@ -127,6 +133,43 @@ func (cm *CooldownManager) CheckCooldown(commandName string, message twitch.Priv
 	return remaining
 }
 
+// ShouldShowCooldownMessage checks if we should show the cooldown message to the user
+func (cm *CooldownManager) ShouldShowCooldownMessage(commandName string, message twitch.PrivateMessage) bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	// Get last message time for this command and user
+	lastMessage, exists := cm.lastMessage[commandName][message.User.Name]
+	if !exists {
+		return true // No previous message
+	}
+
+	// Get cooldown config for command
+	config, exists := cm.configs[commandName]
+	if !exists {
+		return true // No cooldown config, show message
+	}
+
+	// Get user type
+	userType := GetUserType(message)
+
+	// Get cooldown duration for user type
+	var cooldown time.Duration
+	switch userType {
+	case UserTypeBroadcaster:
+		cooldown = config.Broadcaster
+	case UserTypeMod:
+		cooldown = config.Mod
+	case UserTypeVIP:
+		cooldown = config.VIP
+	default:
+		cooldown = config.Regular
+	}
+
+	// If cooldown has expired, show message
+	return time.Since(lastMessage) >= cooldown
+}
+
 // UpdateLastUsage updates the last usage time for a command and user
 func (cm *CooldownManager) UpdateLastUsage(commandName string, message twitch.PrivateMessage) {
 	cm.mu.Lock()
@@ -136,6 +179,17 @@ func (cm *CooldownManager) UpdateLastUsage(commandName string, message twitch.Pr
 		cm.lastUsage[commandName] = make(map[string]time.Time)
 	}
 	cm.lastUsage[commandName][message.User.Name] = time.Now()
+}
+
+// UpdateLastMessageTime updates the last time we showed a cooldown message to a user
+func (cm *CooldownManager) UpdateLastMessageTime(commandName string, message twitch.PrivateMessage) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if _, exists := cm.lastMessage[commandName]; !exists {
+		cm.lastMessage[commandName] = make(map[string]time.Time)
+	}
+	cm.lastMessage[commandName][message.User.Name] = time.Now()
 }
 
 // FormatCooldown formats a cooldown duration into a human-readable string
