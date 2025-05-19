@@ -47,4 +47,5 @@
 - [ ] Add setup guide for new users
 - [ ] Document all available commands
 - [ ] Add configuration file documentation
-- [ ] Add development guide for contributors 
+- [ ] Add development guide for contributors
+- [ ] Enhance command aliases (e.g., !j for !join) 
