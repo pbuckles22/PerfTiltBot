@@ -170,31 +170,81 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return fmt.Sprintf("@%s has joined the queue at position %d!", message.User.Name, position)
 			}
 
-			// Get target user to add
-			targetUser := strings.TrimPrefix(parts[1], "@")
 			isMod := message.User.Badges["moderator"] > 0 || message.User.Badges["broadcaster"] > 0
 
-			// Check if position was specified
-			if len(parts) > 2 {
-				position, err := strconv.Atoi(parts[2])
-				if err != nil {
-					return fmt.Sprintf("@%s, invalid position number provided.", message.User.Name)
-				}
+			// Check if the last argument is a number (position)
+			lastArg := parts[len(parts)-1]
+			position, err := strconv.Atoi(lastArg)
+			hasPosition := err == nil
 
-				err = queue.AddAtPosition(targetUser, position, isMod)
-				if err != nil {
-					return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-				}
-				return fmt.Sprintf("@%s added %s to the queue at position %d!", message.User.Name, targetUser, position)
+			// Get all usernames (excluding position if present)
+			usernames := parts[1:]
+			if hasPosition {
+				usernames = usernames[:len(usernames)-1]
 			}
 
-			// No position specified, add to end
-			err := queue.Add(targetUser, isMod)
-			if err != nil {
-				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			// Process each username
+			var addedUsers []string
+			var alreadyInQueue []string
+			for _, username := range usernames {
+				username = strings.TrimPrefix(username, "@")
+				if hasPosition {
+					err = queue.AddAtPosition(username, position, isMod)
+					if err != nil {
+						if err.Error() == "user is already in queue" {
+							alreadyInQueue = append(alreadyInQueue, username)
+							continue
+						}
+						return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+					}
+					addedUsers = append(addedUsers, username)
+					position++ // Increment position for next user
+				} else {
+					err = queue.Add(username, isMod)
+					if err != nil {
+						if err.Error() == "user is already in queue" {
+							alreadyInQueue = append(alreadyInQueue, username)
+							continue
+						}
+						return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+					}
+					addedUsers = append(addedUsers, username)
+				}
 			}
-			position := queue.Position(targetUser)
-			return fmt.Sprintf("@%s added %s to the queue at position %d!", message.User.Name, targetUser, position)
+
+			// Build response message
+			var responseParts []string
+			if len(addedUsers) > 0 {
+				if len(addedUsers) == 1 {
+					pos := queue.Position(addedUsers[0])
+					responseParts = append(responseParts, fmt.Sprintf("added %s to the queue at position %d", addedUsers[0], pos))
+				} else {
+					if hasPosition {
+						// If we specified a position, show each user's position
+						positions := make([]string, len(addedUsers))
+						for i, user := range addedUsers {
+							pos := queue.Position(user)
+							positions[i] = fmt.Sprintf("%s (position %d)", user, pos)
+						}
+						responseParts = append(responseParts, fmt.Sprintf("added %s to the queue", strings.Join(positions, ", ")))
+					} else {
+						responseParts = append(responseParts, fmt.Sprintf("added %s to the queue", strings.Join(addedUsers, ", ")))
+					}
+				}
+			}
+			if len(alreadyInQueue) > 0 {
+				if len(alreadyInQueue) == 1 {
+					responseParts = append(responseParts, fmt.Sprintf("%s is already in the queue", alreadyInQueue[0]))
+				} else {
+					responseParts = append(responseParts, fmt.Sprintf("%s are already in the queue", strings.Join(alreadyInQueue, ", ")))
+				}
+			}
+
+			if len(responseParts) == 0 {
+				return fmt.Sprintf("@%s, no users were added to the queue.", message.User.Name)
+			}
+
+			return fmt.Sprintf("@%s %s!", message.User.Name, strings.Join(responseParts, " and "))
 		},
 	})
 
