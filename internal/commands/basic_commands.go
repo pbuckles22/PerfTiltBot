@@ -512,6 +512,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 	// Move command - Moves a specified user to a new position in the queue (Mods/VIPs only)
 	cm.RegisterCommand(Command{
 		Name:        "move",
+		Aliases:     []string{"mv"},
 		Description: "Move a specified user to a new position in the queue (Mods/VIPs only). If position is beyond queue length, user will be moved to the end.",
 		ModOnly:     false,
 		Handler: func(message twitch.PrivateMessage) string {
