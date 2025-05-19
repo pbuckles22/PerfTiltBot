@@ -1,0 +1,129 @@
+package twitch
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"github.com/gempir/go-twitch-irc/v4"
+)
+
+// Bot represents a Twitch chat bot
+type Bot struct {
+	channel         string
+	authManager     *AuthManager
+	client          *twitch.Client
+	commandHandlers []func(twitch.PrivateMessage) string
+}
+
+// NewBot creates a new Twitch bot instance
+func NewBot(channel string, authManager *AuthManager) *Bot {
+	return &Bot{
+		channel:     channel,
+		authManager: authManager,
+	}
+}
+
+// Connect establishes a connection to Twitch IRC
+func (b *Bot) Connect(ctx context.Context) error {
+	// Get initial access token
+	token, err := b.authManager.GetAccessToken()
+	if err != nil {
+		return fmt.Errorf("error getting initial access token: %w", err)
+	}
+
+	// Create Twitch client
+	b.client = twitch.NewClient("PerfTiltBot", token)
+
+	// Set up connection handler
+	b.client.OnConnect(func() {
+		log.Printf("Successfully connected to Twitch IRC")
+		log.Printf("Joining channel: %s", b.channel)
+		b.client.Join(b.channel)
+	})
+
+	// Set up message handler
+	b.client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+		// Check if token needs refresh
+		if !b.authManager.IsTokenValid() {
+			newToken, err := b.authManager.GetAccessToken()
+			if err != nil {
+				log.Printf("Error refreshing token: %v", err)
+				return
+			}
+			b.client.SetIRCToken(newToken)
+		}
+
+		// Handle commands
+		for _, handler := range b.commandHandlers {
+			if response := handler(message); response != "" {
+				b.client.Say(message.Channel, response)
+				break
+			}
+		}
+	})
+
+	// Start connection in a goroutine
+	go func() {
+		if err := b.client.Connect(); err != nil {
+			log.Printf("Error connecting to Twitch IRC: %v", err)
+		}
+	}()
+
+	// Start token refresh goroutine
+	go b.refreshTokenLoop(ctx)
+
+	return nil
+}
+
+// refreshTokenLoop periodically checks and refreshes the token
+func (b *Bot) refreshTokenLoop(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !b.authManager.IsTokenValid() {
+				newToken, err := b.authManager.GetAccessToken()
+				if err != nil {
+					log.Printf("Error refreshing token: %v", err)
+					continue
+				}
+				b.client.SetIRCToken(newToken)
+			}
+		}
+	}
+}
+
+// RegisterCommandHandler adds a new command handler
+func (b *Bot) RegisterCommandHandler(handler func(twitch.PrivateMessage) string) {
+	b.commandHandlers = append(b.commandHandlers, handler)
+}
+
+// IsCommand checks if a message is a command
+func (b *Bot) IsCommand(message string) bool {
+	return strings.HasPrefix(message, "!")
+}
+
+// GetCommandName extracts the command name from a message
+func (b *Bot) GetCommandName(message string) string {
+	parts := strings.Fields(message)
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.TrimPrefix(parts[0], "!")
+}
+
+// GetCommandArgs extracts the command arguments from a message
+func (b *Bot) GetCommandArgs(message string) []string {
+	parts := strings.Fields(message)
+	if len(parts) <= 1 {
+		return nil
+	}
+	return parts[1:]
+}
