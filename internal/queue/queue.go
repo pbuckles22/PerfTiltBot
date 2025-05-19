@@ -244,8 +244,8 @@ func (q *Queue) RemoveUser(username string) (bool, error) {
 	return false, nil
 }
 
-// MoveUser moves a specified user to a new position in the queue
-func (q *Queue) MoveUser(username string, newPosition int) error {
+// MoveUser moves a user to a new position in the queue (1-based)
+func (q *Queue) MoveUser(username string, position int) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -253,40 +253,82 @@ func (q *Queue) MoveUser(username string, newPosition int) error {
 		return fmt.Errorf("queue system is currently disabled")
 	}
 
-	// Validate new position
-	if newPosition < 1 {
-		newPosition = 1
-	}
-	if newPosition > len(q.users) {
-		newPosition = len(q.users)
-	}
-
-	// Find the user's current position
-	currentIndex := -1
+	// Find user's current position
+	currentPos := -1
 	for i, user := range q.users {
 		if user.Username == username {
-			currentIndex = i
+			currentPos = i
 			break
 		}
 	}
 
-	if currentIndex == -1 {
-		return fmt.Errorf("user is not in the queue")
+	if currentPos == -1 {
+		return fmt.Errorf("user not found in queue")
 	}
 
-	// Remove the user from their current position
-	user := q.users[currentIndex]
-	q.users = append(q.users[:currentIndex], q.users[currentIndex+1:]...)
-
-	// Insert the user at the new position (converting from 1-based to 0-based index)
-	newIndex := newPosition - 1
-	if newIndex == len(q.users) {
-		// Append to end
-		q.users = append(q.users, user)
-	} else {
-		// Insert at position
-		q.users = append(q.users[:newIndex], append([]QueuedUser{user}, q.users[newIndex:]...)...)
+	// Validate position
+	if position < 1 {
+		position = 1
 	}
+	if position > len(q.users) {
+		position = len(q.users)
+	}
+
+	// Convert to 0-based index
+	position--
+
+	// If same position, no need to move
+	if currentPos == position {
+		return nil
+	}
+
+	// Get user
+	user := q.users[currentPos]
+
+	// Remove from current position
+	q.users = append(q.users[:currentPos], q.users[currentPos+1:]...)
+
+	// Insert at new position
+	q.users = append(q.users[:position], append([]QueuedUser{user}, q.users[position:]...)...)
+
+	return nil
+}
+
+// MoveToEnd moves a user to the end of the queue
+func (q *Queue) MoveToEnd(username string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if !q.enabled {
+		return fmt.Errorf("queue system is currently disabled")
+	}
+
+	// Find user's current position
+	currentPos := -1
+	for i, user := range q.users {
+		if user.Username == username {
+			currentPos = i
+			break
+		}
+	}
+
+	if currentPos == -1 {
+		return fmt.Errorf("user not found in queue")
+	}
+
+	// If already at end, no need to move
+	if currentPos == len(q.users)-1 {
+		return nil
+	}
+
+	// Get user
+	user := q.users[currentPos]
+
+	// Remove from current position
+	q.users = append(q.users[:currentPos], q.users[currentPos+1:]...)
+
+	// Add to end
+	q.users = append(q.users, user)
 
 	return nil
 }

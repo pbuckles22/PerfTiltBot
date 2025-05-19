@@ -189,16 +189,29 @@ func RegisterBasicCommands(cm *CommandManager) {
 			for _, username := range usernames {
 				username = strings.TrimPrefix(username, "@")
 				if hasPosition {
-					err = queue.AddAtPosition(username, position, isMod)
-					if err != nil {
-						if err.Error() == "user is already in queue" {
-							alreadyInQueue = append(alreadyInQueue, username)
-							continue
+					// If position is beyond queue length, add to end
+					if position > len(queue.List()) {
+						err = queue.Add(username, isMod)
+						if err != nil {
+							if err.Error() == "user is already in queue" {
+								alreadyInQueue = append(alreadyInQueue, username)
+								continue
+							}
+							return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
 						}
-						return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+						addedUsers = append(addedUsers, username)
+					} else {
+						err = queue.AddAtPosition(username, position, isMod)
+						if err != nil {
+							if err.Error() == "user is already in queue" {
+								alreadyInQueue = append(alreadyInQueue, username)
+								continue
+							}
+							return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+						}
+						addedUsers = append(addedUsers, username)
+						position++ // Increment position for next user
 					}
-					addedUsers = append(addedUsers, username)
-					position++ // Increment position for next user
 				} else {
 					err = queue.Add(username, isMod)
 					if err != nil {
@@ -217,14 +230,22 @@ func RegisterBasicCommands(cm *CommandManager) {
 			if len(addedUsers) > 0 {
 				if len(addedUsers) == 1 {
 					pos := queue.Position(addedUsers[0])
-					responseParts = append(responseParts, fmt.Sprintf("added %s to the queue at position %d", addedUsers[0], pos))
+					if hasPosition && position > len(queue.List()) {
+						responseParts = append(responseParts, fmt.Sprintf("%s has been added to the end of the queue", addedUsers[0]))
+					} else {
+						responseParts = append(responseParts, fmt.Sprintf("added %s to the queue at position %d", addedUsers[0], pos))
+					}
 				} else {
 					if hasPosition {
 						// If we specified a position, show each user's position
 						positions := make([]string, len(addedUsers))
 						for i, user := range addedUsers {
 							pos := queue.Position(user)
-							positions[i] = fmt.Sprintf("%s (position %d)", user, pos)
+							if pos == len(queue.List()) {
+								positions[i] = fmt.Sprintf("%s (end of queue)", user)
+							} else {
+								positions[i] = fmt.Sprintf("%s (position %d)", user, pos)
+							}
 						}
 						responseParts = append(responseParts, fmt.Sprintf("added %s to the queue", strings.Join(positions, ", ")))
 					} else {
@@ -386,7 +407,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 	cm.RegisterCommand(Command{
 		Name:        "remove",
 		Aliases:     []string{"rm"},
-		Description: "Remove a specified user from the queue (Mods/VIPs only)",
+		Description: "Remove specified users or positions from the queue (Mods/VIPs only). Usage: !remove [username1] [username2] ... or !remove [position1] [position2] ...",
 		ModOnly:     false,
 		Handler: func(message twitch.PrivateMessage) string {
 			// Check if user is privileged (Mod, VIP, or Broadcaster)
@@ -396,35 +417,110 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 			args := strings.Fields(message.Message)
 			if len(args) < 2 {
-				return "Usage: !remove <username>"
+				return "Usage: !remove <username1> [username2] ... or !remove <position1> [position2] ..."
 			}
 
-			username := args[1]
 			queue := cm.GetQueue()
 
 			if !queue.IsEnabled() {
 				return "The queue system is currently disabled."
 			}
 
-			removed, err := queue.RemoveUser(username)
-			if err != nil {
-				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			// Check if all arguments are numbers (positions)
+			allPositions := true
+			positions := make([]int, 0)
+			for _, arg := range args[1:] {
+				pos, err := strconv.Atoi(arg)
+				if err != nil {
+					allPositions = false
+					break
+				}
+				positions = append(positions, pos)
 			}
 
-			if removed {
-				return fmt.Sprintf("@%s has been removed from the queue!", username)
+			var removedUsers []string
+			var notFoundUsers []string
+			var invalidPositions []int
+
+			if allPositions {
+				// Handle position-based removal
+				for _, pos := range positions {
+					if pos < 1 || pos > len(queue.List()) {
+						invalidPositions = append(invalidPositions, pos)
+						continue
+					}
+					user := queue.List()[pos-1]
+					if queue.Remove(user.Username) {
+						removedUsers = append(removedUsers, user.Username)
+					}
+				}
 			} else {
-				return fmt.Sprintf("@%s is not in the queue.", username)
+				// Handle username-based removal
+				for _, username := range args[1:] {
+					username = strings.TrimPrefix(username, "@")
+					removed, err := queue.RemoveUser(username)
+					if err != nil {
+						return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+					}
+					if removed {
+						removedUsers = append(removedUsers, username)
+					} else {
+						notFoundUsers = append(notFoundUsers, username)
+					}
+				}
 			}
+
+			// Build response message
+			var responseParts []string
+
+			if len(removedUsers) > 0 {
+				if len(removedUsers) == 1 {
+					responseParts = append(responseParts, fmt.Sprintf("removed %s from the queue", removedUsers[0]))
+				} else {
+					responseParts = append(responseParts, fmt.Sprintf("removed %s from the queue", strings.Join(removedUsers, ", ")))
+				}
+			}
+
+			if len(notFoundUsers) > 0 {
+				if len(notFoundUsers) == 1 {
+					responseParts = append(responseParts, fmt.Sprintf("%s is not in the queue", notFoundUsers[0]))
+				} else {
+					responseParts = append(responseParts, fmt.Sprintf("%s are not in the queue", strings.Join(notFoundUsers, ", ")))
+				}
+			}
+
+			if len(invalidPositions) > 0 {
+				if len(invalidPositions) == 1 {
+					responseParts = append(responseParts, fmt.Sprintf("position %d is invalid", invalidPositions[0]))
+				} else {
+					posStrs := make([]string, len(invalidPositions))
+					for i, pos := range invalidPositions {
+						posStrs[i] = fmt.Sprintf("%d", pos)
+					}
+					responseParts = append(responseParts, fmt.Sprintf("positions %s are invalid", strings.Join(posStrs, ", ")))
+				}
+			}
+
+			if len(responseParts) == 0 {
+				return fmt.Sprintf("@%s, no users were removed from the queue.", message.User.Name)
+			}
+
+			return fmt.Sprintf("@%s %s!", message.User.Name, strings.Join(responseParts, " and "))
 		},
 	})
 
 	// Move command - Moves a specified user to a new position in the queue (Mods/VIPs only)
 	cm.RegisterCommand(Command{
 		Name:        "move",
-		Description: "Move a specified user to a new position in the queue (Mods/VIPs only)",
+		Description: "Move a specified user to a new position in the queue (Mods/VIPs only). If position is beyond queue length, user will be moved to the end.",
 		ModOnly:     false,
 		Handler: func(message twitch.PrivateMessage) string {
+			queue := cm.GetQueue()
+
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+
 			// Check if user is privileged (Mod, VIP, or Broadcaster)
 			if !isPrivileged(message) {
 				return "This command can only be used by moderators and VIPs."
@@ -441,10 +537,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return "Invalid position number provided."
 			}
 
-			queue := cm.GetQueue()
-
-			if !queue.IsEnabled() {
-				return "The queue system is currently disabled."
+			// If position is beyond queue length, move to end
+			if position > len(queue.List()) {
+				err = queue.MoveToEnd(username)
+				if err != nil {
+					return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+				}
+				return fmt.Sprintf("@%s has been moved to the end of the queue!", username)
 			}
 
 			err = queue.MoveUser(username, position)
