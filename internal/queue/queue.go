@@ -1,7 +1,9 @@
 package queue
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -19,6 +21,13 @@ type Queue struct {
 	enabled bool
 	paused  bool
 	mu      sync.RWMutex
+}
+
+// QueueState represents the serializable state of the queue
+type QueueState struct {
+	Enabled bool     `json:"enabled"`
+	Paused  bool     `json:"paused"`
+	Users   []string `json:"users"`
 }
 
 // NewQueue creates a new queue manager
@@ -382,6 +391,53 @@ func (q *Queue) MoveToEnd(username string) error {
 
 	// Add to end
 	q.users = append(q.users, user)
+
+	return nil
+}
+
+// SaveState saves the current queue state to a file
+func (q *Queue) SaveState(filename string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	state := QueueState{
+		Enabled: q.enabled,
+		Paused:  q.paused,
+		Users:   make([]string, len(q.users)),
+	}
+	copy(state.Users, q.users)
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("failed to marshal queue state: %w", err)
+	}
+
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		return fmt.Errorf("failed to write queue state: %w", err)
+	}
+
+	return nil
+}
+
+// LoadState loads the queue state from a file
+func (q *Queue) LoadState(filename string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("failed to read queue state: %w", err)
+	}
+
+	var state QueueState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return fmt.Errorf("failed to unmarshal queue state: %w", err)
+	}
+
+	q.enabled = state.Enabled
+	q.paused = state.Paused
+	q.users = make([]QueuedUser, len(state.Users))
+	copy(q.users, state.Users)
 
 	return nil
 }

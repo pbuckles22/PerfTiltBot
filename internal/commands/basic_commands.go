@@ -558,4 +558,92 @@ func RegisterBasicCommands(cm *CommandManager) {
 			return fmt.Sprintf("@%s has been moved to position %d in the queue!", username, position)
 		},
 	})
+
+	// Pause Queue command - Pauses the queue system (mod/VIP only)
+	cm.RegisterCommand(Command{
+		Name:         "pausequeue",
+		Aliases:      []string{"pq"},
+		Description:  "Pause the queue system (no new additions allowed) (Mods/VIPs only)",
+		ModOnly:      false,
+		IsPrivileged: true,
+		Handler: func(message twitch.PrivateMessage) string {
+			queue := cm.GetQueue()
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+			if queue.IsPaused() {
+				return "Queue system is already paused!"
+			}
+			err := queue.Pause()
+			if err != nil {
+				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			}
+			return fmt.Sprintf("@%s has paused the queue system!", message.User.Name)
+		},
+	})
+
+	// Unpause Queue command - Resumes the queue system (mod/VIP only)
+	cm.RegisterCommand(Command{
+		Name:         "unpausequeue",
+		Aliases:      []string{"uq"},
+		Description:  "Resume the queue system (Mods/VIPs only)",
+		ModOnly:      false,
+		IsPrivileged: true,
+		Handler: func(message twitch.PrivateMessage) string {
+			queue := cm.GetQueue()
+			if !queue.IsEnabled() {
+				return "The queue system is currently disabled."
+			}
+			if !queue.IsPaused() {
+				return "Queue system is not paused!"
+			}
+			err := queue.Unpause()
+			if err != nil {
+				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+			}
+			return fmt.Sprintf("@%s has resumed the queue system!", message.User.Name)
+		},
+	})
+
+	// Add savequeue command
+	cm.RegisterCommand(Command{
+		Name:        "savequeue",
+		Aliases:     []string{"sq"},
+		Description: "Save the current queue state to a file (Mods/VIPs only)",
+		Handler: func(message twitch.PrivateMessage) string {
+			if !isPrivileged(message) {
+				return "Only moderators and VIPs can save the queue state."
+			}
+
+			queue := cm.GetQueue()
+			if err := queue.SaveState("queue_state.json"); err != nil {
+				return fmt.Sprintf("Failed to save queue state: %v", err)
+			}
+
+			return "Queue state has been saved successfully!"
+		},
+		ModOnly:      false,
+		IsPrivileged: true,
+	})
+
+	// Add restorequeue command
+	cm.RegisterCommand(Command{
+		Name:        "restorequeue",
+		Aliases:     []string{"rq"},
+		Description: "Restore the queue state from a saved file (Mods/VIPs only)",
+		Handler: func(message twitch.PrivateMessage) string {
+			if !isPrivileged(message) {
+				return "Only moderators and VIPs can restore the queue state."
+			}
+
+			queue := cm.GetQueue()
+			if err := queue.LoadState("queue_state.json"); err != nil {
+				return fmt.Sprintf("Failed to restore queue state: %v", err)
+			}
+
+			return "Queue state has been restored successfully!"
+		},
+		ModOnly:      false,
+		IsPrivileged: true,
+	})
 }
