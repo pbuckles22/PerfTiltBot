@@ -77,12 +77,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Start Queue command - Enables the queue system (mod only)
+	// Start Queue command - Enables the queue system (mod/VIP only)
 	cm.RegisterCommand(Command{
-		Name:        "startqueue",
-		Aliases:     []string{"sq"},
-		Description: "Start the queue system (Mods only)",
-		ModOnly:     true,
+		Name:         "startqueue",
+		Aliases:      []string{"sq"},
+		Description:  "Start the queue system (Mods/VIPs only)",
+		ModOnly:      false,
+		IsPrivileged: true,
 		Handler: func(message twitch.PrivateMessage) string {
 			queue := cm.GetQueue()
 			if queue.IsEnabled() {
@@ -93,12 +94,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// End Queue command - Disables and clears the queue (mod only)
+	// End Queue command - Disables and clears the queue (mod/VIP only)
 	cm.RegisterCommand(Command{
-		Name:        "endqueue",
-		Aliases:     []string{"eq"},
-		Description: "End the queue system and clear the queue (Mods only)",
-		ModOnly:     true,
+		Name:         "endqueue",
+		Aliases:      []string{"eq"},
+		Description:  "End the queue system and clear the queue (Mods/VIPs only)",
+		ModOnly:      false,
+		IsPrivileged: true,
 		Handler: func(message twitch.PrivateMessage) string {
 			queue := cm.GetQueue()
 			if !queue.IsEnabled() {
@@ -305,12 +307,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Clear command - Removes all users from the queue (mod only)
+	// Clear command - Removes all users from the queue (mod/VIP only)
 	cm.RegisterCommand(Command{
-		Name:        "clearqueue",
-		Aliases:     []string{"cq"},
-		Description: "Clear the entire queue (Mods only)",
-		ModOnly:     true,
+		Name:         "clearqueue",
+		Aliases:      []string{"cq"},
+		Description:  "Clear the entire queue (Mods/VIPs only)",
+		ModOnly:      false,
+		IsPrivileged: true,
 		Handler: func(message twitch.PrivateMessage) string {
 			queue := cm.GetQueue()
 
@@ -343,11 +346,12 @@ func RegisterBasicCommands(cm *CommandManager) {
 		},
 	})
 
-	// Kill command - Safely shuts down the bot (mod only)
+	// Kill command - Safely shuts down the bot (mod/VIP only)
 	cm.RegisterCommand(Command{
-		Name:        "kill",
-		Description: "Safely shut down the bot (Mods/VIPs only)",
-		ModOnly:     false,
+		Name:         "kill",
+		Description:  "Safely shut down the bot (Mods/VIPs only)",
+		ModOnly:      false,
+		IsPrivileged: true,
 		Handler: func(message twitch.PrivateMessage) string {
 			// Check if user is privileged (Mod, VIP, or Broadcaster)
 			if !isPrivileged(message) {
