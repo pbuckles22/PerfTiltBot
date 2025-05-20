@@ -80,11 +80,19 @@ function Start-Bot {
 
     $SECRETS_FILE = "configs/${CHANNEL}_secrets.yaml"
     $CONTAINER_NAME = "perftiltbot-${CHANNEL}"
+    $BOT_CONFIG = "configs/bot.yaml"
 
     # Check if secrets file exists
     if (-not (Test-Path $SECRETS_FILE)) {
         Write-Host "Error: Secrets file not found: $SECRETS_FILE"
         Write-Host "Please create a secrets file at: $SECRETS_FILE"
+        exit 1
+    }
+
+    # Check if bot config exists
+    if (-not (Test-Path $BOT_CONFIG)) {
+        Write-Host "Error: Bot configuration file not found: $BOT_CONFIG"
+        Write-Host "Please create a bot configuration file at: $BOT_CONFIG"
         exit 1
     }
 
@@ -106,6 +114,7 @@ function Start-Bot {
     docker run -d `
         --name $CONTAINER_NAME `
         -v "${PWD}/configs/secrets.yaml:/app/configs/secrets.yaml" `
+        -v "${PWD}/configs/bot.yaml:/app/configs/bot.yaml" `
         -v "perftiltbot-${CHANNEL}-data:/app/data" `
         perftiltbot
 
