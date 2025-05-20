@@ -123,14 +123,14 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	cm.RegisterCommand(&Command{
-		Name:        "save",
-		Aliases:     []string{"s"},
+		Name:        "savequeue",
+		Aliases:     []string{"svq"},
 		Description: "Save the queue state",
 		Handler:     handleSaveState,
 	})
 
 	cm.RegisterCommand(&Command{
-		Name:        "load",
+		Name:        "restorequeue",
 		Aliases:     []string{"ld"},
 		Description: "Load the queue state",
 		Handler:     handleLoadState,
