@@ -44,6 +44,7 @@ start_bot() {
     local SECRETS_FILE="configs/${CHANNEL}_secrets.yaml"
     local CONTAINER_NAME="perftiltbot-${CHANNEL}"
     local BOT_CONFIG="configs/bot.yaml"
+    local TEMP_SECRETS="configs/temp_secrets.yaml"
 
     # Check if secrets file exists
     if [ ! -f "$SECRETS_FILE" ]; then
@@ -59,9 +60,28 @@ start_bot() {
         exit 1
     fi
 
-    # Copy channel-specific secrets to secrets.yaml
-    echo "Setting up configuration for channel: $CHANNEL"
-    cp "$SECRETS_FILE" "configs/secrets.yaml"
+    # Extract bot name from channel secrets
+    local BOT_NAME=$(grep "bot_name:" "$SECRETS_FILE" | cut -d'"' -f2)
+    if [ -z "$BOT_NAME" ]; then
+        echo "Error: bot_name not found in $SECRETS_FILE"
+        exit 1
+    fi
+
+    # Check if bot-specific config exists
+    local BOT_SECRETS="configs/${BOT_NAME}_secrets.yaml"
+    if [ -f "$BOT_SECRETS" ]; then
+        echo "Found bot-specific configuration for $BOT_NAME"
+        # Merge bot secrets with channel secrets
+        echo "Merging configurations..."
+        # First copy bot secrets as base
+        cp "$BOT_SECRETS" "$TEMP_SECRETS"
+        # Then merge channel-specific overrides
+        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$TEMP_SECRETS" "$SECRETS_FILE" > "configs/secrets.yaml"
+        rm "$TEMP_SECRETS"
+    else
+        echo "No bot-specific configuration found, using channel configuration directly"
+        cp "$SECRETS_FILE" "configs/secrets.yaml"
+    fi
 
     # Check if container is already running
     if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then

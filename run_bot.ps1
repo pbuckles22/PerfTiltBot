@@ -82,6 +82,7 @@ function Start-Bot {
     $SECRETS_FILE = "configs/${CHANNEL}_secrets.yaml"
     $CONTAINER_NAME = "perftiltbot-${CHANNEL}"
     $BOT_CONFIG = "configs/bot.yaml"
+    $TEMP_SECRETS = "configs/temp_secrets.yaml"
 
     # Check if secrets file exists
     if (-not (Test-Path $SECRETS_FILE)) {
@@ -97,9 +98,28 @@ function Start-Bot {
         exit 1
     }
 
-    # Copy channel-specific secrets to secrets.yaml
-    Write-Host "Setting up configuration for channel: $CHANNEL"
-    Copy-Item $SECRETS_FILE "configs/secrets.yaml" -Force
+    # Extract bot name from channel secrets
+    $BOT_NAME = (Select-String -Path $SECRETS_FILE -Pattern 'bot_name:' | ForEach-Object { $_.Line -replace '.*bot_name:\s*"([^"]+)".*', '$1' })
+    if (-not $BOT_NAME) {
+        Write-Host "Error: bot_name not found in $SECRETS_FILE"
+        exit 1
+    }
+
+    # Check if bot-specific config exists
+    $BOT_SECRETS = "configs/${BOT_NAME}_secrets.yaml"
+    if (Test-Path $BOT_SECRETS) {
+        Write-Host "Found bot-specific configuration for $BOT_NAME"
+        # Merge bot secrets with channel secrets
+        Write-Host "Merging configurations..."
+        # First copy bot secrets as base
+        Copy-Item $BOT_SECRETS $TEMP_SECRETS -Force
+        # Then merge channel-specific overrides
+        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' $TEMP_SECRETS $SECRETS_FILE > "configs/secrets.yaml"
+        Remove-Item $TEMP_SECRETS
+    } else {
+        Write-Host "No bot-specific configuration found, using channel configuration directly"
+        Copy-Item $SECRETS_FILE "configs/secrets.yaml" -Force
+    }
 
     # Check if container is already running
     $runningContainer = docker ps -q -f "name=$CONTAINER_NAME"
