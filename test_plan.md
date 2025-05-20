@@ -23,8 +23,14 @@
 - [ ] Run `.\run_bot.ps1 build`
   - Expected: Successfully build Docker image
   - Verify: `docker images` shows perftiltbot image
+  - Verify: Image is tagged with correct version
 - [ ] Run build with existing image
   - Expected: Rebuild image without errors
+  - Verify: Version tag is updated
+- [ ] Run build with specific version
+  - Expected: Image is built with specified version
+  - Verify: Version is correctly set in image labels
+  - Verify: Version is available in container environment
 
 #### 3. Start Command
 - [ ] Start bot for channel with existing secrets file
@@ -32,6 +38,7 @@
   - Verify: Container running with correct name
   - Verify: Correct secrets file mounted
   - Verify: Data volume created
+  - Verify: Version information is accessible
 - [ ] Start bot for channel without secrets file
   - Expected: Display error about missing secrets file
 - [ ] Start bot for channel with existing running container
@@ -41,6 +48,7 @@
   - Expected: Each bot runs in separate container
   - Verify: Each has correct secrets file
   - Verify: Each has separate data volume
+  - Verify: Each has correct version information
 
 #### 4. Stop Channel Command
 - [ ] Stop running bot for specific channel
@@ -104,9 +112,14 @@
   - Expected: Successfully build both stages
   - Verify: Final image size is smaller than single-stage build
   - Verify: No build tools in final image
+  - Verify: Version label is set correctly
 - [ ] Build with cached layers
   - Expected: Faster build time
   - Verify: Correct use of layer caching
+- [ ] Build with version argument
+  - Expected: Image is built with specified version
+  - Verify: Version is set in both label and environment
+  - Verify: Version persists in running container
 
 #### 2. Image Size and Layers
 - [ ] Check final image size
@@ -115,6 +128,10 @@
 - [ ] Inspect image layers
   - Expected: Minimal number of layers
   - Verify: Layers are properly ordered for caching
+- [ ] Verify version metadata
+  - Expected: Version label is present
+  - Expected: Maintainer label is present
+  - Verify: Labels are correctly formatted
 
 #### 3. Timezone Configuration
 - [ ] Verify timezone setting
