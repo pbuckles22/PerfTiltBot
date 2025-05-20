@@ -533,12 +533,12 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return "This command can only be used by moderators and VIPs."
 			}
 
-			if len(args) < 3 {
+			if len(args) < 2 {
 				return "Usage: !move <username> <position>"
 			}
 
-			username := args[1]
-			position, err := strconv.Atoi(args[2])
+			username := args[0]
+			position, err := strconv.Atoi(args[1])
 			if err != nil {
 				return "Invalid position number provided."
 			}
@@ -618,7 +618,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 			}
 
 			queue := cm.GetQueue()
-			if err := queue.SaveState("queue_state.json"); err != nil {
+			if err := queue.SaveState("/app/data/queue_state.json"); err != nil {
 				return fmt.Sprintf("Failed to save queue state: %v", err)
 			}
 
@@ -639,7 +639,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 			}
 
 			queue := cm.GetQueue()
-			if err := queue.LoadState("queue_state.json"); err != nil {
+			if err := queue.LoadState("/app/data/queue_state.json"); err != nil {
 				return fmt.Sprintf("Failed to restore queue state: %v", err)
 			}
 
@@ -659,7 +659,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 				return "Only moderators and VIPs can delete the saved queue state."
 			}
 
-			if err := os.Remove("queue_state.json"); err != nil {
+			if err := os.Remove("/app/data/queue_state.json"); err != nil {
 				if os.IsNotExist(err) {
 					return "No saved queue state exists to delete."
 				}
