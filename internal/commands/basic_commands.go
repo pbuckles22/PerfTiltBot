@@ -15,9 +15,10 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	cm.RegisterCommand(&Command{
-		Name:        "sq",
-		Description: "Start the queue system",
-		Handler:     handleStartQueue,
+		Name:        "savequeue",
+		Aliases:     []string{"svq"},
+		Description: "Save the queue state",
+		Handler:     handleSaveState,
 	})
 
 	cm.RegisterCommand(&Command{
@@ -75,7 +76,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 	cm.RegisterCommand(&Command{
 		Name:        "move",
-		Aliases:     []string{"m"},
+		Aliases:     []string{"m", "mv"},
 		Description: "Move a user in the queue",
 		Handler:     handleMove,
 	})
@@ -109,29 +110,22 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	cm.RegisterCommand(&Command{
-		Name:        "pause",
-		Aliases:     []string{"pa"},
+		Name:        "pausequeue",
+		Aliases:     []string{"pq"},
 		Description: "Pause the queue system",
 		Handler:     handlePause,
 	})
 
 	cm.RegisterCommand(&Command{
-		Name:        "unpause",
-		Aliases:     []string{"up"},
+		Name:        "unpausequeue",
+		Aliases:     []string{"uq"},
 		Description: "Unpause the queue system",
 		Handler:     handleUnpause,
 	})
 
 	cm.RegisterCommand(&Command{
-		Name:        "savequeue",
-		Aliases:     []string{"svq"},
-		Description: "Save the queue state",
-		Handler:     handleSaveState,
-	})
-
-	cm.RegisterCommand(&Command{
 		Name:        "restorequeue",
-		Aliases:     []string{"ld"},
+		Aliases:     []string{"rq"},
 		Description: "Load the queue state",
 		Handler:     handleLoadState,
 	})
@@ -148,6 +142,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 		Aliases:     []string{"rs"},
 		Description: "Restart the bot",
 		Handler:     handleRestart,
+	})
+
+	cm.RegisterCommand(&Command{
+		Name:        "startqueue",
+		Aliases:     []string{"sq"},
+		Description: "Start the queue system",
+		Handler:     handleStartQueue,
 	})
 }
 
