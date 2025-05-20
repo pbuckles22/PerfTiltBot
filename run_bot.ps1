@@ -1,3 +1,66 @@
+<#
+.SYNOPSIS
+    PerfTiltBot Management Script
+
+.DESCRIPTION
+    This script manages PerfTiltBot instances for different Twitch channels.
+    It handles building, starting, stopping, and monitoring bot instances.
+
+.COMMANDS
+    start <channel_name>
+        Starts a bot instance for the specified channel.
+        - Builds the Docker image if it doesn't exist
+        - Copies channel-specific secrets file
+        - Creates a named container with mounted volumes
+        - Starts the bot with proper configuration
+
+    stop-channel <channel_name>
+        Stops and removes a specific channel's bot instance.
+        - Gracefully stops the container
+        - Removes the container
+        - Preserves the data volume for future use
+
+    stop-all
+        Stops and removes all running bot instances.
+        - Stops all perftiltbot containers
+        - Removes all containers
+        - Preserves all data volumes
+
+    list
+        Lists all running bot instances.
+        - Shows channel names
+        - Shows container names
+        - Shows running status
+
+    build
+        Builds the Docker image for the bot.
+        - Uses multi-stage build for smaller image size
+        - Includes version tagging
+        - Sets up proper environment
+
+.EXAMPLES
+    # Start a bot for a channel
+    .\run_bot.ps1 start pbuckles
+
+    # Stop a specific channel's bot
+    .\run_bot.ps1 stop-channel pbuckles
+
+    # List all running bots
+    .\run_bot.ps1 list
+
+    # Stop all bots
+    .\run_bot.ps1 stop-all
+
+    # Build the Docker image
+    .\run_bot.ps1 build
+
+.NOTES
+    - Requires Docker Desktop to be running
+    - Requires PowerShell 7.0 or higher
+    - Channel-specific secrets files must exist in configs/
+    - Each channel gets its own container and data volume
+#>
+
 # Function to build the Docker image
 function Build-Image {
     Write-Host "Building Docker image..."
