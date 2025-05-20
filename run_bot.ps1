@@ -59,6 +59,7 @@
     - Requires PowerShell 7.0 or higher
     - Channel-specific secrets files must exist in configs/
     - Each channel gets its own container and data volume
+    - Bot configuration file (bot.yaml) must exist in configs/
 #>
 
 # Function to build the Docker image
