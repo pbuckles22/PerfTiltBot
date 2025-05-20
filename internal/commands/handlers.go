@@ -2,8 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -16,6 +14,11 @@ var commandManager *CommandManager
 // SetCommandManager sets the command manager instance for the handlers
 func SetCommandManager(cm *CommandManager) {
 	commandManager = cm
+}
+
+// GetCommandManager returns the command manager instance
+func GetCommandManager() *CommandManager {
+	return commandManager
 }
 
 // handleHelp shows the list of available commands
@@ -102,155 +105,43 @@ func handleClearQueue(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("@%s cleared the queue! Removed %d user(s).", message.User.Name, count)
 }
 
-// handleJoin adds a user to the queue
+// handleJoin handles the !join command
 func handleJoin(message twitch.PrivateMessage, args []string) string {
-	queue := commandManager.GetQueue()
-	if !queue.IsEnabled() {
+	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
 	}
 
-	// Handle regular users (can only add themselves)
-	if !isPrivileged(message) {
-		err := queue.Add(message.User.Name, false)
-		if err != nil {
-			return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-		}
-		position := queue.Position(message.User.Name)
-		return fmt.Sprintf("@%s has joined the queue at position %d!", message.User.Name, position)
+	username := message.User.Name
+	if len(args) > 0 && isPrivileged(message) {
+		username = args[0]
 	}
 
-	// Handle privileged users (mods/VIPs)
-	if len(args) == 0 {
-		// No target specified, add themselves
-		err := queue.Add(message.User.Name, true)
-		if err != nil {
-			return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-		}
-		position := queue.Position(message.User.Name)
-		return fmt.Sprintf("@%s has joined the queue at position %d!", message.User.Name, position)
+	err := cm.GetQueue().Add(username, isPrivileged(message))
+	if err != nil {
+		return fmt.Sprintf("Error joining queue: %v", err)
 	}
 
-	isMod := message.User.Badges["moderator"] > 0 || message.User.Badges["broadcaster"] > 0
-
-	// Check if the last argument is a number (position)
-	lastArg := args[len(args)-1]
-	position, err := strconv.Atoi(lastArg)
-	hasPosition := err == nil
-
-	// Get all usernames (excluding position if present)
-	usernames := args
-	if hasPosition {
-		usernames = usernames[:len(usernames)-1]
-	}
-
-	// Process each username
-	var addedUsers []string
-	var alreadyInQueue []string
-	for _, username := range usernames {
-		username = strings.TrimPrefix(username, "@")
-		if hasPosition {
-			// If position is beyond queue length, add to end
-			if position > len(queue.List()) {
-				err = queue.Add(username, isMod)
-				if err != nil {
-					if err.Error() == "user is already in queue" {
-						alreadyInQueue = append(alreadyInQueue, username)
-						continue
-					}
-					return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-				}
-				addedUsers = append(addedUsers, username)
-			} else {
-				err = queue.AddAtPosition(username, position, isMod)
-				if err != nil {
-					if err.Error() == "user is already in queue" {
-						alreadyInQueue = append(alreadyInQueue, username)
-						continue
-					}
-					return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-				}
-				addedUsers = append(addedUsers, username)
-				position++ // Increment position for next user
-			}
-		} else {
-			err = queue.Add(username, isMod)
-			if err != nil {
-				if err.Error() == "user is already in queue" {
-					alreadyInQueue = append(alreadyInQueue, username)
-					continue
-				}
-				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-			}
-			addedUsers = append(addedUsers, username)
-		}
-	}
-
-	// Build response message
-	var responseParts []string
-	if len(addedUsers) > 0 {
-		if len(addedUsers) == 1 {
-			pos := queue.Position(addedUsers[0])
-			if hasPosition && position > len(queue.List()) {
-				responseParts = append(responseParts, fmt.Sprintf("%s has been added to the end of the queue", addedUsers[0]))
-			} else {
-				responseParts = append(responseParts, fmt.Sprintf("added %s to the queue at position %d", addedUsers[0], pos))
-			}
-		} else {
-			if hasPosition {
-				// If we specified a position, show each user's position
-				positions := make([]string, len(addedUsers))
-				for i, user := range addedUsers {
-					pos := queue.Position(user)
-					if pos == len(queue.List()) {
-						positions[i] = fmt.Sprintf("%s (end of queue)", user)
-					} else {
-						positions[i] = fmt.Sprintf("%s (position %d)", user, pos)
-					}
-				}
-				responseParts = append(responseParts, fmt.Sprintf("added %s to the queue", strings.Join(positions, ", ")))
-			} else {
-				responseParts = append(responseParts, fmt.Sprintf("added %s to the queue", strings.Join(addedUsers, ", ")))
-			}
-		}
-	}
-	if len(alreadyInQueue) > 0 {
-		if len(alreadyInQueue) == 1 {
-			responseParts = append(responseParts, fmt.Sprintf("%s is already in the queue", alreadyInQueue[0]))
-		} else {
-			responseParts = append(responseParts, fmt.Sprintf("%s are already in the queue", strings.Join(alreadyInQueue, ", ")))
-		}
-	}
-
-	if len(responseParts) == 0 {
-		return fmt.Sprintf("@%s, no users were added to the queue.", message.User.Name)
-	}
-
-	return fmt.Sprintf("@%s %s!", message.User.Name, strings.Join(responseParts, " and "))
+	pos := cm.GetQueue().Position(username)
+	return fmt.Sprintf("%s has joined the queue at position %d!", username, pos)
 }
 
-// handleLeave removes a user from the queue
+// handleLeave handles the !leave command
 func handleLeave(message twitch.PrivateMessage, args []string) string {
-	queue := commandManager.GetQueue()
-	if !queue.IsEnabled() {
+	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
 	}
 
-	var targetUser string
+	username := message.User.Name
 	if len(args) > 0 && isPrivileged(message) {
-		// Mod/VIP is removing someone else
-		targetUser = strings.TrimPrefix(args[0], "@")
-	} else {
-		// Regular user leaving themselves
-		targetUser = message.User.Name
+		username = args[0]
 	}
 
-	if queue.Remove(targetUser) {
-		if targetUser != message.User.Name {
-			return fmt.Sprintf("@%s has removed %s from the queue!", message.User.Name, targetUser)
-		}
-		return fmt.Sprintf("@%s has left the queue!", targetUser)
+	if cm.GetQueue().Remove(username) {
+		return fmt.Sprintf("%s has left the queue!", username)
 	}
-	return fmt.Sprintf("@%s, %s is not in the queue!", message.User.Name, targetUser)
+	return fmt.Sprintf("%s is not in the queue!", username)
 }
 
 // handleQueue shows the current queue
@@ -268,7 +159,7 @@ func handleQueue(message twitch.PrivateMessage, args []string) string {
 	// Build numbered list of users in queue
 	var userList []string
 	for i, user := range users {
-		userList = append(userList, fmt.Sprintf("%d. %s", i+1, user.Username))
+		userList = append(userList, fmt.Sprintf("%d. %s", i+1, user))
 	}
 
 	return fmt.Sprintf("Current queue (%d): %s", len(users), strings.Join(userList, ", "))
@@ -288,143 +179,101 @@ func handlePosition(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("@%s, you are at position %d in the queue!", message.User.Name, position)
 }
 
-// handlePop removes users from the front of the queue
+// handlePop handles the !pop command
 func handlePop(message twitch.PrivateMessage, args []string) string {
-	queue := commandManager.GetQueue()
-	if !queue.IsEnabled() {
+	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
 	}
 
-	// Parse count from message if provided
-	count := 1 // Default to 1 if no count specified
+	count := 1
 	if len(args) > 0 {
 		var err error
 		count, err = strconv.Atoi(args[0])
 		if err != nil || count < 1 {
-			return "Invalid count provided. Please specify a positive number."
+			return "Invalid number of users to pop. Please specify a positive number."
 		}
 	}
 
-	// Pop N users from the queue
-	users, err := queue.PopN(count)
+	users, err := cm.GetQueue().PopN(count)
 	if err != nil {
-		return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
+		return fmt.Sprintf("Error popping users: %v", err)
 	}
 
-	// Build response message
-	if len(users) == 1 {
-		return fmt.Sprintf("@%s has been removed from the front of the queue!", users[0].Username)
-	} else {
-		usernames := make([]string, len(users))
-		for i, user := range users {
-			usernames[i] = user.Username
-		}
-		return fmt.Sprintf("Removed %d users from the front of the queue: %s", len(users), strings.Join(usernames, ", "))
+	if len(users) == 0 {
+		return "Queue is empty."
 	}
+
+	// Format the response
+	var response strings.Builder
+	response.WriteString("Popped from queue: ")
+	for i, user := range users {
+		if i > 0 {
+			response.WriteString(", ")
+		}
+		response.WriteString(user)
+	}
+
+	return response.String()
 }
 
-// handleRemove removes specified users from the queue
-func handleRemove(message twitch.PrivateMessage, args []string) string {
-	if len(args) == 0 {
-		return "Usage: !remove <username1> [username2] ... or !remove <position1> [position2] ..."
-	}
-
-	queue := commandManager.GetQueue()
-	if !queue.IsEnabled() {
+// handleList handles the !list command
+func handleList(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
 	}
 
-	// Check if all arguments are numbers (positions)
-	allPositions := true
-	positions := make([]int, 0)
-	for _, arg := range args {
-		pos, err := strconv.Atoi(arg)
-		if err != nil {
-			allPositions = false
-			break
-		}
-		positions = append(positions, pos)
+	users := cm.GetQueue().List()
+	if len(users) == 0 {
+		return "Queue is empty."
 	}
 
-	var removedUsers []string
-	var notFoundUsers []string
-	var invalidPositions []int
-
-	if allPositions {
-		// Handle position-based removal
-		for _, pos := range positions {
-			if pos < 1 || pos > len(queue.List()) {
-				invalidPositions = append(invalidPositions, pos)
-				continue
-			}
-			user := queue.List()[pos-1]
-			if queue.Remove(user.Username) {
-				removedUsers = append(removedUsers, user.Username)
-			}
+	// Format the response
+	var response strings.Builder
+	response.WriteString("Current queue: ")
+	for i, user := range users {
+		if i > 0 {
+			response.WriteString(", ")
 		}
-	} else {
-		// Handle username-based removal
-		for _, username := range args {
-			username = strings.TrimPrefix(username, "@")
-			removed, err := queue.RemoveUser(username)
-			if err != nil {
-				return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-			}
-			if removed {
-				removedUsers = append(removedUsers, username)
-			} else {
-				notFoundUsers = append(notFoundUsers, username)
-			}
-		}
+		response.WriteString(user)
 	}
 
-	// Build response message
-	var responseParts []string
-
-	if len(removedUsers) > 0 {
-		if len(removedUsers) == 1 {
-			responseParts = append(responseParts, fmt.Sprintf("removed %s from the queue", removedUsers[0]))
-		} else {
-			responseParts = append(responseParts, fmt.Sprintf("removed %s from the queue", strings.Join(removedUsers, ", ")))
-		}
-	}
-
-	if len(notFoundUsers) > 0 {
-		if len(notFoundUsers) == 1 {
-			responseParts = append(responseParts, fmt.Sprintf("%s is not in the queue", notFoundUsers[0]))
-		} else {
-			responseParts = append(responseParts, fmt.Sprintf("%s are not in the queue", strings.Join(notFoundUsers, ", ")))
-		}
-	}
-
-	if len(invalidPositions) > 0 {
-		if len(invalidPositions) == 1 {
-			responseParts = append(responseParts, fmt.Sprintf("position %d is invalid", invalidPositions[0]))
-		} else {
-			posStrs := make([]string, len(invalidPositions))
-			for i, pos := range invalidPositions {
-				posStrs[i] = fmt.Sprintf("%d", pos)
-			}
-			responseParts = append(responseParts, fmt.Sprintf("positions %s are invalid", strings.Join(posStrs, ", ")))
-		}
-	}
-
-	if len(responseParts) == 0 {
-		return fmt.Sprintf("@%s, no users were removed from the queue.", message.User.Name)
-	}
-
-	return fmt.Sprintf("@%s %s!", message.User.Name, strings.Join(responseParts, " and "))
+	return response.String()
 }
 
-// handleMove moves a user to a new position in the queue
+// handleRemove handles the !remove command
+func handleRemove(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
+		return "Queue system is currently disabled."
+	}
+
+	if len(args) < 1 {
+		return "Usage: !remove <username>"
+	}
+
+	username := args[0]
+	removed, err := cm.GetQueue().RemoveUser(username)
+	if err != nil {
+		return fmt.Sprintf("Error removing user: %v", err)
+	}
+
+	if removed {
+		return fmt.Sprintf("%s has been removed from the queue!", username)
+	}
+	return fmt.Sprintf("%s is not in the queue!", username)
+}
+
+// handleMove handles the !move command
 func handleMove(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
+		return "Queue system is currently disabled."
+	}
+
 	if len(args) < 2 {
 		return "Usage: !move <username> <position>"
-	}
-
-	queue := commandManager.GetQueue()
-	if !queue.IsEnabled() {
-		return "Queue system is currently disabled."
 	}
 
 	username := args[0]
@@ -433,152 +282,84 @@ func handleMove(message twitch.PrivateMessage, args []string) string {
 		return "Invalid position number provided."
 	}
 
-	// If position is beyond queue length, move to end
-	if position > len(queue.List()) {
-		err = queue.MoveToEnd(username)
-		if err != nil {
-			return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-		}
-		return fmt.Sprintf("@%s has been moved to the end of the queue!", username)
+	if err := cm.GetQueue().MoveUser(username, position); err != nil {
+		return fmt.Sprintf("Error moving user: %v", err)
 	}
 
-	err = queue.MoveUser(username, position)
-	if err != nil {
-		return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-	}
-
-	return fmt.Sprintf("@%s has been moved to position %d in the queue!", username, position)
+	return fmt.Sprintf("%s has been moved to position %d!", username, position)
 }
 
-// handlePauseQueue pauses the queue system
-func handlePauseQueue(message twitch.PrivateMessage, args []string) string {
-	queue := commandManager.GetQueue()
-	if !queue.IsEnabled() {
-		return "Queue system is currently disabled."
+// handlePause handles the !pause command
+func handlePause(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	if err := cm.GetQueue().Pause(); err != nil {
+		return fmt.Sprintf("Error pausing queue: %v", err)
 	}
-	if queue.IsPaused() {
-		return "Queue system is already paused!"
-	}
-	err := queue.Pause()
-	if err != nil {
-		return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-	}
-	return fmt.Sprintf("@%s has paused the queue system!", message.User.Name)
+	return "Queue system has been paused!"
 }
 
-// handleUnpauseQueue resumes the queue system
-func handleUnpauseQueue(message twitch.PrivateMessage, args []string) string {
-	queue := commandManager.GetQueue()
-	if !queue.IsEnabled() {
-		return "Queue system is currently disabled."
+// handleUnpause handles the !unpause command
+func handleUnpause(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	if err := cm.GetQueue().Unpause(); err != nil {
+		return fmt.Sprintf("Error unpausing queue: %v", err)
 	}
-	if !queue.IsPaused() {
-		return "Queue system is not paused!"
-	}
-	err := queue.Unpause()
-	if err != nil {
-		return fmt.Sprintf("@%s, %s", message.User.Name, err.Error())
-	}
-	return fmt.Sprintf("@%s has resumed the queue system!", message.User.Name)
+	return "Queue system has been unpaused!"
 }
 
-// handleSaveQueue saves the current queue state
-func handleSaveQueue(message twitch.PrivateMessage, args []string) string {
-	if !isPrivileged(message) {
-		return "This command can only be used by moderators and VIPs."
-	}
-
-	queue := commandManager.GetQueue()
-	if err := queue.SaveState(); err != nil {
-		return fmt.Sprintf("Failed to save queue state: %v", err)
-	}
-	return "Queue state has been saved successfully!"
-}
-
-// handleRestoreQueue restores the queue state from a saved file
-func handleRestoreQueue(message twitch.PrivateMessage, args []string) string {
-	if !isPrivileged(message) {
-		return "This command can only be used by moderators and VIPs."
-	}
-
-	queue := commandManager.GetQueue()
-	if err := queue.LoadState(); err != nil {
-		return fmt.Sprintf("Failed to restore queue state: %v", err)
-	}
-	return "Queue state has been restored successfully!"
-}
-
-// handleDeleteQueue deletes the saved queue state
-func handleDeleteQueue(message twitch.PrivateMessage, args []string) string {
-	if !isPrivileged(message) {
-		return "This command can only be used by moderators and VIPs."
-	}
-
-	queue := commandManager.GetQueue()
-	stateFile := filepath.Join(queue.GetDataPath(), "queue_state.json")
-	if err := os.Remove(stateFile); err != nil {
-		if os.IsNotExist(err) {
-			return "No saved queue state exists to delete."
-		}
-		return fmt.Sprintf("Failed to delete saved queue state: %v", err)
-	}
-	return "Saved queue state has been deleted successfully!"
-}
-
-// handleKill initiates bot shutdown
-func handleKill(message twitch.PrivateMessage, args []string) string {
-	if !isPrivileged(message) {
-		return "This command can only be used by moderators and VIPs."
-	}
-
-	// Save state before shutdown
-	if err := commandManager.SaveState(); err != nil {
-		return fmt.Sprintf("Failed to save queue state: %v", err)
-	}
-
-	// Request shutdown
-	commandManager.RequestShutdown()
-	return fmt.Sprintf("@%s has initiated bot shutdown. Goodbye! 👋", message.User.Name)
-}
-
-// handleRestart restarts the bot
-func handleRestart(message twitch.PrivateMessage, args []string) string {
-	if !isPrivileged(message) {
-		return "This command can only be used by moderators and VIPs."
-	}
-
-	// Save state before restart
-	if err := commandManager.SaveState(); err != nil {
-		return fmt.Sprintf("Failed to save queue state: %v", err)
-	}
-
-	// Request shutdown (the container manager should restart the container)
-	commandManager.RequestShutdown()
-	return fmt.Sprintf("@%s has initiated bot restart. See you soon! 🔄", message.User.Name)
-}
-
-// handleSaveState saves the current queue state
+// handleSaveState handles the !save command
 func handleSaveState(message twitch.PrivateMessage, args []string) string {
-	if !isPrivileged(message) {
-		return "This command can only be used by moderators and VIPs."
+	cm := GetCommandManager()
+	if err := cm.GetQueue().SaveState(); err != nil {
+		return fmt.Sprintf("Error saving queue state: %v", err)
 	}
-
-	queue := commandManager.GetQueue()
-	if err := queue.SaveState(); err != nil {
-		return fmt.Sprintf("Failed to save queue state: %v", err)
-	}
-	return "Queue state saved successfully."
+	return "Queue state has been saved!"
 }
 
-// handleLoadState loads the queue state
+// handleLoadState handles the !load command
 func handleLoadState(message twitch.PrivateMessage, args []string) string {
-	if !isPrivileged(message) {
-		return "This command can only be used by moderators and VIPs."
+	cm := GetCommandManager()
+	if err := cm.GetQueue().LoadState(); err != nil {
+		return fmt.Sprintf("Error loading queue state: %v", err)
+	}
+	return "Queue state has been loaded!"
+}
+
+// handleKill handles the !kill command
+func handleKill(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	cm.RequestShutdown()
+	return "Bot shutdown initiated. Goodbye! 👋"
+}
+
+// handleRestart handles the !restart command
+func handleRestart(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	cm.RequestShutdown()
+	return "Bot restart initiated. See you soon! 🔄"
+}
+
+// handleEnable handles the !enable command
+func handleEnable(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	cm.GetQueue().Enable()
+	return "Queue system has been enabled!"
+}
+
+// handleDisable handles the !disable command
+func handleDisable(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	cm.GetQueue().Disable()
+	return "Queue system has been disabled!"
+}
+
+// handleClear handles the !clear command
+func handleClear(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
+		return "Queue system is currently disabled."
 	}
 
-	queue := commandManager.GetQueue()
-	if err := queue.LoadState(); err != nil {
-		return fmt.Sprintf("Failed to restore queue state: %v", err)
-	}
-	return "Queue state restored successfully."
+	count := cm.GetQueue().Clear()
+	return fmt.Sprintf("Queue cleared! Removed %d user(s).", count)
 }
