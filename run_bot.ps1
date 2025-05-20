@@ -106,7 +106,7 @@ function Test-Config {
     }
 
     if ($missingFields.Count -gt 0) {
-        Write-Host "Error: Missing required fields in $ConfigFile:"
+        Write-Host "Error: Missing required fields in ${ConfigFile}:"
         $missingFields | ForEach-Object { Write-Host $_ }
         return $false
     }
@@ -123,10 +123,10 @@ function Get-ChannelsByBot {
     Write-Host "----------------------------"
     
     $found = $false
-    Get-ChildItem "configs/*_secrets.yaml" | ForEach-Object {
+    Get-ChildItem "configs/*_config_secrets.yaml" | ForEach-Object {
         $botName = (Select-String -Path $_.FullName -Pattern 'bot_name:' | ForEach-Object { $_.Line -replace '.*bot_name:\s*"([^"]+)".*', '$1' })
         if ($botName -eq $BotName) {
-            $channel = $_.BaseName -replace '_secrets$', ''
+            $channel = $_.BaseName -replace '_config_secrets$', ''
             Write-Host "Channel: $channel"
             Write-Host "Config file: $($_.FullName)"
             Write-Host "----------------------------"
@@ -145,21 +145,21 @@ function Update-BotConfig {
         [string]$BotName
     )
 
-    $botSecrets = "configs/${BotName}_secrets.yaml"
+    $botAuth = "configs/${BotName}_auth_secrets.yaml"
     $tempFile = "configs/temp_update.yaml"
 
     # Check if bot config exists
-    if (-not (Test-Path $botSecrets)) {
-        Write-Host "Error: Bot configuration not found: $botSecrets"
+    if (-not (Test-Path $botAuth)) {
+        Write-Host "Error: Bot authentication file not found: $botAuth"
         return $false
     }
 
     # Create backup
-    Copy-Item $botSecrets "${botSecrets}.bak"
-    Write-Host "Created backup at ${botSecrets}.bak"
+    Copy-Item $botAuth "${botAuth}.bak"
+    Write-Host "Created backup at ${botAuth}.bak"
 
     # Create temporary file with current config
-    Copy-Item $botSecrets $tempFile
+    Copy-Item $botAuth $tempFile
 
     # Edit the temporary file
     if ($env:EDITOR) {
@@ -171,8 +171,8 @@ function Update-BotConfig {
     # Validate the updated configuration
     if (Test-Config $tempFile) {
         # Update the bot config
-        Move-Item $tempFile $botSecrets -Force
-        Write-Host "Bot configuration updated successfully"
+        Move-Item $tempFile $botAuth -Force
+        Write-Host "Bot authentication updated successfully"
         
         # List affected channels
         Write-Host "Affected channels:"
@@ -191,15 +191,15 @@ function Start-Bot {
         [string]$CHANNEL
     )
 
-    $SECRETS_FILE = "configs/${CHANNEL}_secrets.yaml"
+    $CHANNEL_CONFIG = "configs/${CHANNEL}_config_secrets.yaml"
     $CONTAINER_NAME = "perftiltbot-${CHANNEL}"
     $BOT_CONFIG = "configs/bot.yaml"
     $TEMP_SECRETS = "configs/temp_secrets.yaml"
 
-    # Check if secrets file exists
-    if (-not (Test-Path $SECRETS_FILE)) {
-        Write-Host "Error: Secrets file not found: $SECRETS_FILE"
-        Write-Host "Please create a secrets file at: $SECRETS_FILE"
+    # Check if channel config exists
+    if (-not (Test-Path $CHANNEL_CONFIG)) {
+        Write-Host "Error: Channel configuration file not found: $CHANNEL_CONFIG"
+        Write-Host "Please create a channel configuration file at: $CHANNEL_CONFIG"
         exit 1
     }
 
@@ -210,27 +210,31 @@ function Start-Bot {
         exit 1
     }
 
-    # Extract bot name from channel secrets
-    $BOT_NAME = (Select-String -Path $SECRETS_FILE -Pattern 'bot_name:' | ForEach-Object { $_.Line -replace '.*bot_name:\s*"([^"]+)".*', '$1' })
+    # Extract bot name from channel config
+    $BOT_NAME = (Select-String -Path $CHANNEL_CONFIG -Pattern 'bot_name:' | ForEach-Object { $_.Line -replace '.*bot_name:\s*"([^"]+)".*', '$1' })
     if (-not $BOT_NAME) {
-        Write-Host "Error: bot_name not found in $SECRETS_FILE"
+        Write-Host "Error: bot_name not found in $CHANNEL_CONFIG"
         exit 1
     }
 
-    # Check if bot-specific config exists
-    $BOT_SECRETS = "configs/${BOT_NAME}_secrets.yaml"
-    if (Test-Path $BOT_SECRETS) {
-        Write-Host "Found bot-specific configuration for $BOT_NAME"
-        # Merge bot secrets with channel secrets
+    # Check if bot auth exists
+    $BOT_AUTH = "configs/${BOT_NAME}_auth_secrets.yaml"
+    if (Test-Path $BOT_AUTH) {
+        Write-Host "Found bot authentication for $BOT_NAME"
+        # Merge bot auth with channel config
         Write-Host "Merging configurations..."
-        # First copy bot secrets as base
-        Copy-Item $BOT_SECRETS $TEMP_SECRETS -Force
+        # First copy bot auth as base
+        Copy-Item $BOT_AUTH $TEMP_SECRETS -Force
         # Then merge channel-specific overrides
-        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' $TEMP_SECRETS $SECRETS_FILE > "configs/secrets.yaml"
+        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' $TEMP_SECRETS $CHANNEL_CONFIG > "configs/secrets.yaml"
         Remove-Item $TEMP_SECRETS
+        # Explicitly set the channel field to ensure it is present
+        yq eval ".channel = \"$CHANNEL\"" -i "configs/secrets.yaml"
+        # Restructure the YAML to match the expected format in the bot code
+        yq eval '.twitch = {"bot_token": .oauth, "client_id": .client_id, "client_secret": .client_secret, "refresh_token": .refresh_token, "bot_username": .bot_name, "channel": .channel, "data_path": .data_path}' -i "configs/secrets.yaml"
     } else {
-        Write-Host "No bot-specific configuration found, using channel configuration directly"
-        Copy-Item $SECRETS_FILE "configs/secrets.yaml" -Force
+        Write-Host "Error: Bot authentication file not found: $BOT_AUTH"
+        exit 1
     }
 
     # Validate the final configuration
@@ -239,13 +243,11 @@ function Start-Bot {
         exit 1
     }
 
-    # Check if container is already running
-    $runningContainer = docker ps -q -f "name=$CONTAINER_NAME"
-    if ($runningContainer) {
-        Write-Host "Container $CONTAINER_NAME is already running"
-        Write-Host "Stopping and removing existing container..."
-        docker stop $CONTAINER_NAME
-        docker rm $CONTAINER_NAME
+    # Check if container is already running or exists
+    $existingContainer = docker ps -a -q -f "name=$CONTAINER_NAME"
+    if ($existingContainer) {
+        Write-Host "Container $CONTAINER_NAME already exists. Removing it..."
+        docker rm -f $CONTAINER_NAME
     }
 
     # Run the container

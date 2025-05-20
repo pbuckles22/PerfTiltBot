@@ -3,6 +3,42 @@ package commands
 // RegisterBasicCommands registers all basic queue management commands
 func RegisterBasicCommands(cm *CommandManager) {
 	cm.RegisterCommand(&Command{
+		Name:        "help",
+		Description: "Show the list of available commands",
+		Handler:     handleHelp,
+	})
+
+	cm.RegisterCommand(&Command{
+		Name:        "ping",
+		Description: "Check if the bot is alive",
+		Handler:     handlePing,
+	})
+
+	cm.RegisterCommand(&Command{
+		Name:        "sq",
+		Description: "Start the queue system",
+		Handler:     handleStartQueue,
+	})
+
+	cm.RegisterCommand(&Command{
+		Name:        "endqueue",
+		Description: "End the queue system",
+		Handler:     handleEndQueue,
+	})
+
+	cm.RegisterCommand(&Command{
+		Name:        "clearqueue",
+		Description: "Clear all users from the queue",
+		Handler:     handleClearQueue,
+	})
+
+	cm.RegisterCommand(&Command{
+		Name:        "queue",
+		Description: "Show the current queue",
+		Handler:     handleQueue,
+	})
+
+	cm.RegisterCommand(&Command{
 		Name:        "join",
 		Aliases:     []string{"j"},
 		Description: "Join the queue",
