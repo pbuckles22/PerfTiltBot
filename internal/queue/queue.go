@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -15,28 +16,34 @@ type QueuedUser struct {
 	IsMod    bool
 }
 
-// Queue manages the user queue
-type Queue struct {
-	users   []QueuedUser
-	enabled bool
-	paused  bool
-	mu      sync.RWMutex
+// QueueState represents the persistent state of the queue
+type QueueState struct {
+	Channel     string   `json:"channel"`      // Channel name this queue belongs to
+	Queue       []string `json:"queue"`        // List of usernames in queue
+	LastUpdated int64    `json:"last_updated"` // Unix timestamp of last update
 }
 
-// QueueState represents the serializable state of the queue
-type QueueState struct {
-	Enabled bool         `json:"enabled"`
-	Paused  bool         `json:"paused"`
-	Users   []QueuedUser `json:"users"`
+// Queue represents a queue of users
+type Queue struct {
+	users    []string
+	mu       sync.RWMutex
+	dataPath string
+	channel  string
+	enabled  bool
+	paused   bool
 }
 
 // NewQueue creates a new queue manager
-func NewQueue() *Queue {
-	return &Queue{
-		users:   make([]QueuedUser, 0),
-		enabled: false,
-		paused:  false,
+func NewQueue(dataPath string, channel string) *Queue {
+	q := &Queue{
+		users:    make([]string, 0),
+		dataPath: dataPath,
+		channel:  channel,
+		enabled:  false,
+		paused:   false,
 	}
+	q.LoadState()
+	return q
 }
 
 // Enable starts the queue system
@@ -45,7 +52,7 @@ func (q *Queue) Enable() {
 	defer q.mu.Unlock()
 	q.enabled = true
 	q.paused = false
-	q.users = make([]QueuedUser, 0) // Clear queue when enabling
+	q.users = make([]string, 0) // Clear queue when enabling
 }
 
 // Disable stops the queue system and clears the queue
@@ -54,7 +61,7 @@ func (q *Queue) Disable() {
 	defer q.mu.Unlock()
 	q.enabled = false
 	q.paused = false
-	q.users = make([]QueuedUser, 0)
+	q.users = make([]string, 0)
 }
 
 // Pause pauses the queue system (no new additions allowed)
@@ -111,7 +118,7 @@ func (q *Queue) Clear() int {
 	defer q.mu.Unlock()
 
 	count := len(q.users)
-	q.users = make([]QueuedUser, 0)
+	q.users = make([]string, 0)
 	return count
 }
 
@@ -130,16 +137,12 @@ func (q *Queue) Add(username string, isMod bool) error {
 
 	// Check if user is already in queue
 	for _, user := range q.users {
-		if user.Username == username {
+		if user == username {
 			return fmt.Errorf("user is already in queue")
 		}
 	}
 
-	q.users = append(q.users, QueuedUser{
-		Username: username,
-		JoinTime: time.Now(),
-		IsMod:    isMod,
-	})
+	q.users = append(q.users, username)
 	return nil
 }
 
@@ -149,7 +152,7 @@ func (q *Queue) Remove(username string) bool {
 	defer q.mu.Unlock()
 
 	for i, user := range q.users {
-		if user.Username == username {
+		if user == username {
 			// Remove user by slicing
 			q.users = append(q.users[:i], q.users[i+1:]...)
 			return true
@@ -159,12 +162,12 @@ func (q *Queue) Remove(username string) bool {
 }
 
 // List returns the current queue
-func (q *Queue) List() []QueuedUser {
+func (q *Queue) List() []string {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
 	// Return a copy to prevent external modifications
-	users := make([]QueuedUser, len(q.users))
+	users := make([]string, len(q.users))
 	copy(users, q.users)
 	return users
 }
@@ -182,7 +185,7 @@ func (q *Queue) Position(username string) int {
 	defer q.mu.RUnlock()
 
 	for i, user := range q.users {
-		if user.Username == username {
+		if user == username {
 			return i + 1
 		}
 	}
@@ -204,7 +207,7 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 
 	// Check if user is already in queue
 	for _, user := range q.users {
-		if user.Username == username {
+		if user == username {
 			return fmt.Errorf("user is already in queue")
 		}
 	}
@@ -218,11 +221,7 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 	}
 
 	// Create new user
-	newUser := QueuedUser{
-		Username: username,
-		JoinTime: time.Now(),
-		IsMod:    isMod,
-	}
+	newUser := username
 
 	// Insert at position (converting from 1-based to 0-based index)
 	position--
@@ -231,22 +230,22 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 		q.users = append(q.users, newUser)
 	} else {
 		// Insert at position
-		q.users = append(q.users[:position], append([]QueuedUser{newUser}, q.users[position:]...)...)
+		q.users = append(q.users[:position], append([]string{newUser}, q.users[position:]...)...)
 	}
 	return nil
 }
 
 // Pop removes and returns the first user from the queue
-func (q *Queue) Pop() (*QueuedUser, error) {
+func (q *Queue) Pop() (string, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	if !q.enabled {
-		return nil, fmt.Errorf("queue system is currently disabled")
+		return "", fmt.Errorf("queue system is currently disabled")
 	}
 
 	if len(q.users) == 0 {
-		return nil, fmt.Errorf("queue is empty")
+		return "", fmt.Errorf("queue is empty")
 	}
 
 	// Get first user
@@ -255,11 +254,11 @@ func (q *Queue) Pop() (*QueuedUser, error) {
 	// Remove first user
 	q.users = q.users[1:]
 
-	return &user, nil
+	return user, nil
 }
 
 // PopN removes and returns the first N users from the queue
-func (q *Queue) PopN(count int) ([]QueuedUser, error) {
+func (q *Queue) PopN(count int) ([]string, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -277,7 +276,7 @@ func (q *Queue) PopN(count int) ([]QueuedUser, error) {
 	}
 
 	// Get first N users
-	users := make([]QueuedUser, count)
+	users := make([]string, count)
 	copy(users, q.users[:count])
 
 	// Remove first N users
@@ -296,7 +295,7 @@ func (q *Queue) RemoveUser(username string) (bool, error) {
 	}
 
 	for i, user := range q.users {
-		if user.Username == username {
+		if user == username {
 			// Remove the user from the queue
 			q.users = append(q.users[:i], q.users[i+1:]...)
 			return true, nil
@@ -318,7 +317,7 @@ func (q *Queue) MoveUser(username string, position int) error {
 	// Find user's current position
 	currentPos := -1
 	for i, user := range q.users {
-		if user.Username == username {
+		if user == username {
 			currentPos = i
 			break
 		}
@@ -351,7 +350,7 @@ func (q *Queue) MoveUser(username string, position int) error {
 	q.users = append(q.users[:currentPos], q.users[currentPos+1:]...)
 
 	// Insert at new position
-	q.users = append(q.users[:position], append([]QueuedUser{user}, q.users[position:]...)...)
+	q.users = append(q.users[:position], append([]string{user}, q.users[position:]...)...)
 
 	return nil
 }
@@ -368,7 +367,7 @@ func (q *Queue) MoveToEnd(username string) error {
 	// Find user's current position
 	currentPos := -1
 	for i, user := range q.users {
-		if user.Username == username {
+		if user == username {
 			currentPos = i
 			break
 		}
@@ -396,22 +395,28 @@ func (q *Queue) MoveToEnd(username string) error {
 }
 
 // SaveState saves the current queue state to a file
-func (q *Queue) SaveState(filename string) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (q *Queue) SaveState() error {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	// Ensure the data directory exists
+	if err := os.MkdirAll(q.dataPath, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
 
 	state := QueueState{
-		Enabled: q.enabled,
-		Paused:  q.paused,
-		Users:   make([]QueuedUser, len(q.users)),
+		Channel:     q.channel,
+		Queue:       q.users,
+		LastUpdated: time.Now().Unix(),
 	}
-	copy(state.Users, q.users)
 
-	data, err := json.Marshal(state)
+	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal queue state: %w", err)
 	}
 
+	// Use channel-specific filename
+	filename := filepath.Join(q.dataPath, fmt.Sprintf("queue_state_%s.json", q.channel))
 	if err := os.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to write queue state: %w", err)
 	}
@@ -420,18 +425,18 @@ func (q *Queue) SaveState(filename string) error {
 }
 
 // LoadState loads the queue state from a file
-func (q *Queue) LoadState(filename string) error {
+func (q *Queue) LoadState() error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	// Use channel-specific filename
+	filename := filepath.Join(q.dataPath, fmt.Sprintf("queue_state_%s.json", q.channel))
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Don't enable the queue if there's no saved state
-			q.enabled = false
-			q.paused = false
-			q.users = make([]QueuedUser, 0)
-			return fmt.Errorf("no saved queue state found")
+			// If file doesn't exist, start with empty queue
+			q.users = make([]string, 0)
+			return nil
 		}
 		return fmt.Errorf("failed to read queue state: %w", err)
 	}
@@ -441,10 +446,16 @@ func (q *Queue) LoadState(filename string) error {
 		return fmt.Errorf("failed to unmarshal queue state: %w", err)
 	}
 
-	q.enabled = state.Enabled
-	q.paused = state.Paused
-	q.users = make([]QueuedUser, len(state.Users))
-	copy(q.users, state.Users)
+	// Verify the channel matches
+	if state.Channel != q.channel {
+		return fmt.Errorf("queue state channel mismatch: expected %s, got %s", q.channel, state.Channel)
+	}
 
+	q.users = state.Queue
 	return nil
+}
+
+// GetDataPath returns the data path for this queue
+func (q *Queue) GetDataPath() string {
+	return q.dataPath
 }

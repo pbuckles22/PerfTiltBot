@@ -11,6 +11,7 @@ import (
 
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/pbuckles22/PerfTiltBot/internal/commands"
+	"github.com/pbuckles22/PerfTiltBot/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,6 +22,7 @@ type SecretsConfig struct {
 		ClientSecret string `yaml:"client_secret"`
 		BotUsername  string `yaml:"bot_username"`
 		Channel      string `yaml:"channel"`
+		DataPath     string `yaml:"data_path"`
 	} `yaml:"twitch"`
 }
 
@@ -90,9 +92,9 @@ func main() {
 	log.Println("Starting PerfTiltBot...")
 
 	// Load configurations
-	secrets, err := loadSecretsConfig("configs/secrets.yaml")
+	cfg, err := config.Load("configs/secrets.yaml")
 	if err != nil {
-		log.Fatalf("Failed to load secrets configuration: %v", err)
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
 	botConfig, err := loadBotConfig("configs/bot.yaml")
@@ -100,14 +102,18 @@ func main() {
 		log.Fatalf("Failed to load bot configuration: %v", err)
 	}
 
-	log.Printf("Loaded configuration for bot: %s, channel: %s", secrets.Twitch.BotUsername, secrets.Twitch.Channel)
+	log.Printf("Loaded configuration for bot: %s, channel: %s", cfg.Twitch.BotUsername, cfg.Twitch.Channel)
 
 	// Create command manager
-	cmdManager := commands.NewCommandManager(botConfig.Bot.CommandPrefix)
-	commands.RegisterBasicCommands(cmdManager)
+	cm := commands.NewCommandManager(
+		botConfig.Bot.CommandPrefix,
+		cfg.Twitch.DataPath,
+		cfg.Twitch.Channel,
+	)
+	commands.RegisterBasicCommands(cm)
 
 	// Create Twitch client
-	client := twitch.NewClient(secrets.Twitch.BotUsername, secrets.Twitch.BotToken)
+	client := twitch.NewClient(cfg.Twitch.BotUsername, cfg.Twitch.BotToken)
 
 	// Channel to track successful connection
 	connectionEstablished := make(chan bool)
@@ -116,8 +122,8 @@ func main() {
 	client.OnConnect(func() {
 		log.Printf("Successfully connected to Twitch IRC")
 		// Join the channel after connection is established
-		log.Printf("Attempting to join channel: %s", secrets.Twitch.Channel)
-		client.Join(secrets.Twitch.Channel)
+		log.Printf("Attempting to join channel: %s", cfg.Twitch.Channel)
+		client.Join(cfg.Twitch.Channel)
 		connectionEstablished <- true
 	})
 
@@ -125,7 +131,7 @@ func main() {
 		log.Printf("Message from %s: %s", message.User.Name, message.Message)
 
 		// Handle commands
-		if response, isCommand := cmdManager.HandleMessage(message); isCommand && response != "" {
+		if response, isCommand := cm.HandleMessage(message); isCommand && response != "" {
 			client.Say(message.Channel, response)
 		}
 	})
@@ -152,18 +158,18 @@ func main() {
 	// Wait for either shutdown signal or kill command
 	go func() {
 		<-sigChan
-		cmdManager.RequestShutdown()
+		cm.RequestShutdown()
 	}()
 
 	// Wait for shutdown request
-	cmdManager.WaitForShutdown()
+	cm.WaitForShutdown()
 
 	// Graceful shutdown
 	log.Println("Shutting down gracefully...")
 
 	// Send a part message before disconnecting
-	log.Printf("Leaving channel: %s", secrets.Twitch.Channel)
-	client.Depart(secrets.Twitch.Channel)
+	log.Printf("Leaving channel: %s", cfg.Twitch.Channel)
+	client.Depart(cfg.Twitch.Channel)
 
 	// Create a shutdown timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*10)

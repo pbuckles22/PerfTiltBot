@@ -1,5 +1,5 @@
 # Use the official Go image as the base image
-FROM golang:1.21-alpine AS builder
+FROM golang:latest AS builder
 
 # Set the working directory
 WORKDIR /app
@@ -26,18 +26,32 @@ WORKDIR /app
 # Copy the binary from the builder stage
 COPY --from=builder /app/bot .
 
+# Create necessary directories and set permissions
+RUN mkdir -p /app/configs /app/data && \
+    chmod 755 /app/configs /app/data
+
 # Create a non-root user
 RUN adduser -D -g '' appuser
+
+# Copy configuration files from the builder stage
+COPY --from=builder /app/configs/bot.yaml ./configs/bot.yaml
+
+# Set proper ownership of all directories and files
+RUN chown -R appuser:appuser /app/configs /app/data
+
+# Switch to non-root user
 USER appuser
 
 # Create a directory for secrets
 RUN mkdir -p /app/configs
 
-# Copy secrets.yaml securely (ensure it is not committed to version control)
-COPY --from=builder /app/configs/secrets.yaml ./configs/secrets.yaml
+# Define volume for queue state data
+VOLUME ["/app/data"]
 
 # Run the bot
 CMD ["./bot"]
 
-# Note: Mount secrets.yaml as a volume at runtime:
-# docker run -v /path/to/secrets.yaml:/app/configs/secrets.yaml perftiltbot 
+# Note: For production, mount both secrets.yaml and channel-specific data directory:
+# docker run -v /path/to/secrets.yaml:/app/configs/secrets.yaml \
+#          -v channel_data:/app/data \
+#          perftiltbot 

@@ -1,5 +1,5 @@
 # Secrets and configuration
-configs/secrets.yaml
+*secrets.yaml
 .env
 
 # Go specific

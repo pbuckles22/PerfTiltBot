@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/gempir/go-twitch-irc/v4"
+	"github.com/pbuckles22/PerfTiltBot/internal/config"
 	"github.com/pbuckles22/PerfTiltBot/internal/queue"
 )
 
@@ -46,14 +47,16 @@ type CommandManager struct {
 	shutdownCh chan struct{}
 	// Cooldown manager for handling command cooldowns
 	cooldown *CooldownManager
+	// Configuration for command settings
+	config *config.Config
 }
 
 // NewCommandManager creates a new command manager
-func NewCommandManager(prefix string) *CommandManager {
+func NewCommandManager(prefix string, dataPath string, channel string) *CommandManager {
 	cm := &CommandManager{
 		commands:   make(map[string]*Command),
 		prefix:     prefix,
-		queue:      queue.NewQueue(),
+		queue:      queue.NewQueue(dataPath, channel),
 		shutdownCh: make(chan struct{}),
 		cooldown:   NewCooldownManager(),
 	}

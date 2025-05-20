@@ -618,7 +618,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 			}
 
 			queue := cm.GetQueue()
-			if err := queue.SaveState("/app/data/queue_state.json"); err != nil {
+			if err := queue.SaveState(); err != nil {
 				return fmt.Sprintf("Failed to save queue state: %v", err)
 			}
 
@@ -639,7 +639,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 			}
 
 			queue := cm.GetQueue()
-			if err := queue.LoadState("/app/data/queue_state.json"); err != nil {
+			if err := queue.LoadState(); err != nil {
 				return fmt.Sprintf("Failed to restore queue state: %v", err)
 			}
 
@@ -671,4 +671,14 @@ func RegisterBasicCommands(cm *CommandManager) {
 		ModOnly:      false,
 		IsPrivileged: true,
 	})
+}
+
+// SaveState saves the current queue state
+func (cm *CommandManager) SaveState() error {
+	return cm.queue.SaveState()
+}
+
+// LoadState loads the queue state
+func (cm *CommandManager) LoadState() error {
+	return cm.queue.LoadState()
 }

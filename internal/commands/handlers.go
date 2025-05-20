@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -483,8 +484,12 @@ func handleUnpauseQueue(message twitch.PrivateMessage, args []string) string {
 
 // handleSaveQueue saves the current queue state
 func handleSaveQueue(message twitch.PrivateMessage, args []string) string {
+	if !isPrivileged(message) {
+		return "This command can only be used by moderators and VIPs."
+	}
+
 	queue := commandManager.GetQueue()
-	if err := queue.SaveState("/app/data/queue_state.json"); err != nil {
+	if err := queue.SaveState(); err != nil {
 		return fmt.Sprintf("Failed to save queue state: %v", err)
 	}
 	return "Queue state has been saved successfully!"
@@ -492,8 +497,12 @@ func handleSaveQueue(message twitch.PrivateMessage, args []string) string {
 
 // handleRestoreQueue restores the queue state from a saved file
 func handleRestoreQueue(message twitch.PrivateMessage, args []string) string {
+	if !isPrivileged(message) {
+		return "This command can only be used by moderators and VIPs."
+	}
+
 	queue := commandManager.GetQueue()
-	if err := queue.LoadState("/app/data/queue_state.json"); err != nil {
+	if err := queue.LoadState(); err != nil {
 		return fmt.Sprintf("Failed to restore queue state: %v", err)
 	}
 	return "Queue state has been restored successfully!"
@@ -501,7 +510,13 @@ func handleRestoreQueue(message twitch.PrivateMessage, args []string) string {
 
 // handleDeleteQueue deletes the saved queue state
 func handleDeleteQueue(message twitch.PrivateMessage, args []string) string {
-	if err := os.Remove("/app/data/queue_state.json"); err != nil {
+	if !isPrivileged(message) {
+		return "This command can only be used by moderators and VIPs."
+	}
+
+	queue := commandManager.GetQueue()
+	stateFile := filepath.Join(queue.GetDataPath(), "queue_state.json")
+	if err := os.Remove(stateFile); err != nil {
 		if os.IsNotExist(err) {
 			return "No saved queue state exists to delete."
 		}
@@ -510,9 +525,60 @@ func handleDeleteQueue(message twitch.PrivateMessage, args []string) string {
 	return "Saved queue state has been deleted successfully!"
 }
 
-// handleKill shuts down the bot
+// handleKill initiates bot shutdown
 func handleKill(message twitch.PrivateMessage, args []string) string {
-	// Signal that we want to shut down
+	if !isPrivileged(message) {
+		return "This command can only be used by moderators and VIPs."
+	}
+
+	// Save state before shutdown
+	if err := commandManager.SaveState(); err != nil {
+		return fmt.Sprintf("Failed to save queue state: %v", err)
+	}
+
+	// Request shutdown
 	commandManager.RequestShutdown()
 	return fmt.Sprintf("@%s has initiated bot shutdown. Goodbye! 👋", message.User.Name)
+}
+
+// handleRestart restarts the bot
+func handleRestart(message twitch.PrivateMessage, args []string) string {
+	if !isPrivileged(message) {
+		return "This command can only be used by moderators and VIPs."
+	}
+
+	// Save state before restart
+	if err := commandManager.SaveState(); err != nil {
+		return fmt.Sprintf("Failed to save queue state: %v", err)
+	}
+
+	// Request shutdown (the container manager should restart the container)
+	commandManager.RequestShutdown()
+	return fmt.Sprintf("@%s has initiated bot restart. See you soon! 🔄", message.User.Name)
+}
+
+// handleSaveState saves the current queue state
+func handleSaveState(message twitch.PrivateMessage, args []string) string {
+	if !isPrivileged(message) {
+		return "This command can only be used by moderators and VIPs."
+	}
+
+	queue := commandManager.GetQueue()
+	if err := queue.SaveState(); err != nil {
+		return fmt.Sprintf("Failed to save queue state: %v", err)
+	}
+	return "Queue state saved successfully."
+}
+
+// handleLoadState loads the queue state
+func handleLoadState(message twitch.PrivateMessage, args []string) string {
+	if !isPrivileged(message) {
+		return "This command can only be used by moderators and VIPs."
+	}
+
+	queue := commandManager.GetQueue()
+	if err := queue.LoadState(); err != nil {
+		return fmt.Sprintf("Failed to restore queue state: %v", err)
+	}
+	return "Queue state restored successfully."
 }
