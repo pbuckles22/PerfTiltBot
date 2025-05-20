@@ -426,8 +426,8 @@ func handleMove(message twitch.PrivateMessage, args []string) string {
 		return "Queue system is currently disabled."
 	}
 
-	username := args[1]
-	position, err := strconv.Atoi(args[2])
+	username := args[0]
+	position, err := strconv.Atoi(args[1])
 	if err != nil {
 		return "Invalid position number provided."
 	}
