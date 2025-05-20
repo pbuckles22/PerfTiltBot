@@ -178,10 +178,24 @@ if ($args.Count -eq 0) {
     Write-Host "  .\run_bot.ps1 start pbuckles"
     Write-Host "  .\run_bot.ps1 stop-channel pbuckles"
     Write-Host "  .\run_bot.ps1 build"
+    Write-Host ""
+    Write-Host "Shortcut:"
+    Write-Host "  .\run_bot.ps1 <channel_name>         - Same as 'start <channel_name>'"
     exit 1
 }
 
 $command = $args[0]
+
+# If only one argument is provided and it's not a known command, treat it as a channel name
+if ($args.Count -eq 1 -and $command -notin @("start", "stop-channel", "build", "list", "stop-all")) {
+    # Check if image exists, build if it doesn't
+    $imageExists = docker images -q perftiltbot
+    if (-not $imageExists) {
+        Build-Image
+    }
+    Start-Bot -CHANNEL $command
+    exit 0
+}
 
 switch ($command) {
     "start" {
