@@ -38,6 +38,17 @@
         - Includes version tagging
         - Sets up proper environment
 
+    list-channels <bot>
+        Lists all channels using a specific bot.
+        - Shows channel names
+        - Shows config files
+
+    update-bot <bot>
+        Updates the shared bot configuration for a specific bot.
+        - Opens the bot configuration file for editing
+        - Validates the updated configuration
+        - Saves the updated configuration
+
 .EXAMPLES
     # Start a bot for a channel
     .\run_bot.ps1 start pbuckles
@@ -53,6 +64,12 @@
 
     # Build the Docker image
     .\run_bot.ps1 build
+
+    # List channels using a specific bot
+    .\run_bot.ps1 list-channels perftiltbot
+
+    # Update shared bot configuration
+    .\run_bot.ps1 update-bot perftiltbot
 
 .NOTES
     - Requires Docker Desktop to be running
@@ -71,6 +88,101 @@ function Build-Image {
         exit 1
     }
     Write-Host "Docker image built successfully!"
+}
+
+# Function to validate configuration
+function Test-Config {
+    param (
+        [string]$ConfigFile
+    )
+
+    $requiredFields = @("bot_name", "channel", "oauth", "client_id", "client_secret")
+    $missingFields = @()
+
+    foreach ($field in $requiredFields) {
+        if (-not (Select-String -Path $ConfigFile -Pattern "^${field}:" -Quiet)) {
+            $missingFields += $field
+        }
+    }
+
+    if ($missingFields.Count -gt 0) {
+        Write-Host "Error: Missing required fields in $ConfigFile:"
+        $missingFields | ForEach-Object { Write-Host $_ }
+        return $false
+    }
+    return $true
+}
+
+# Function to list channels using a specific bot
+function Get-ChannelsByBot {
+    param (
+        [string]$BotName
+    )
+
+    Write-Host "Channels using bot: $BotName"
+    Write-Host "----------------------------"
+    
+    $found = $false
+    Get-ChildItem "configs/*_secrets.yaml" | ForEach-Object {
+        $botName = (Select-String -Path $_.FullName -Pattern 'bot_name:' | ForEach-Object { $_.Line -replace '.*bot_name:\s*"([^"]+)".*', '$1' })
+        if ($botName -eq $BotName) {
+            $channel = $_.BaseName -replace '_secrets$', ''
+            Write-Host "Channel: $channel"
+            Write-Host "Config file: $($_.FullName)"
+            Write-Host "----------------------------"
+            $found = $true
+        }
+    }
+
+    if (-not $found) {
+        Write-Host "No channels found using bot: $BotName"
+    }
+}
+
+# Function to update shared bot configuration
+function Update-BotConfig {
+    param (
+        [string]$BotName
+    )
+
+    $botSecrets = "configs/${BotName}_secrets.yaml"
+    $tempFile = "configs/temp_update.yaml"
+
+    # Check if bot config exists
+    if (-not (Test-Path $botSecrets)) {
+        Write-Host "Error: Bot configuration not found: $botSecrets"
+        return $false
+    }
+
+    # Create backup
+    Copy-Item $botSecrets "${botSecrets}.bak"
+    Write-Host "Created backup at ${botSecrets}.bak"
+
+    # Create temporary file with current config
+    Copy-Item $botSecrets $tempFile
+
+    # Edit the temporary file
+    if ($env:EDITOR) {
+        & $env:EDITOR $tempFile
+    } else {
+        notepad $tempFile
+    }
+
+    # Validate the updated configuration
+    if (Test-Config $tempFile) {
+        # Update the bot config
+        Move-Item $tempFile $botSecrets -Force
+        Write-Host "Bot configuration updated successfully"
+        
+        # List affected channels
+        Write-Host "Affected channels:"
+        Get-ChannelsByBot $BotName
+        return $true
+    } else {
+        Write-Host "Error: Invalid configuration. Changes not saved."
+        Remove-Item $tempFile
+        return $false
+    }
 }
 
 # Function to start a bot for a specific channel
@@ -119,6 +231,12 @@ function Start-Bot {
     } else {
         Write-Host "No bot-specific configuration found, using channel configuration directly"
         Copy-Item $SECRETS_FILE "configs/secrets.yaml" -Force
+    }
+
+    # Validate the final configuration
+    if (-not (Test-Config "configs/secrets.yaml")) {
+        Write-Host "Error: Invalid configuration after merging"
+        exit 1
     }
 
     # Check if container is already running
@@ -203,11 +321,15 @@ if ($args.Count -eq 0) {
     Write-Host "  .\run_bot.ps1 build                   - Build Docker image"
     Write-Host "  .\run_bot.ps1 list                    - List running bot instances"
     Write-Host "  .\run_bot.ps1 stop-all               - Stop all bot instances"
+    Write-Host "  .\run_bot.ps1 list-channels <bot>    - List channels using a specific bot"
+    Write-Host "  .\run_bot.ps1 update-bot <bot>       - Update shared bot configuration"
     Write-Host ""
     Write-Host "Examples:"
     Write-Host "  .\run_bot.ps1 start pbuckles"
     Write-Host "  .\run_bot.ps1 stop-channel pbuckles"
     Write-Host "  .\run_bot.ps1 build"
+    Write-Host "  .\run_bot.ps1 list-channels perftiltbot"
+    Write-Host "  .\run_bot.ps1 update-bot perftiltbot"
     Write-Host ""
     Write-Host "Shortcut:"
     Write-Host "  .\run_bot.ps1 <channel_name>         - Same as 'start <channel_name>'"
@@ -217,7 +339,7 @@ if ($args.Count -eq 0) {
 $command = $args[0]
 
 # If only one argument is provided and it's not a known command, treat it as a channel name
-if ($args.Count -eq 1 -and $command -notin @("start", "stop-channel", "build", "list", "stop-all")) {
+if ($args.Count -eq 1 -and $command -notin @("start", "stop-channel", "build", "list", "stop-all", "list-channels", "update-bot")) {
     # Check if image exists, build if it doesn't
     $imageExists = docker images -q perftiltbot
     if (-not $imageExists) {
@@ -257,6 +379,22 @@ switch ($command) {
     }
     "stop-all" {
         Stop-All-Bots
+    }
+    "list-channels" {
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Bot name required for list-channels command"
+            Write-Host "Usage: .\run_bot.ps1 list-channels <bot_name>"
+            exit 1
+        }
+        Get-ChannelsByBot -BotName $args[1]
+    }
+    "update-bot" {
+        if ($args.Count -lt 2) {
+            Write-Host "Error: Bot name required for update-bot command"
+            Write-Host "Usage: .\run_bot.ps1 update-bot <bot_name>"
+            exit 1
+        }
+        Update-BotConfig -BotName $args[1]
     }
     default {
         Write-Host "Error: Unknown command '$command'"
