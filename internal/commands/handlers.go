@@ -27,47 +27,67 @@ func handleHelp(message twitch.PrivateMessage, args []string) string {
 	commands := commandManager.GetCommandList()
 	var commandList []string
 
-	// Define base commands that are always shown regardless of queue state
-	baseCommands := map[string]bool{
-		"help":       true,
-		"ping":       true,
-		"startqueue": true,
-	}
-
-	// Define queue commands that are only shown when queue is enabled
-	queueCommands := map[string]bool{
-		"help":       true,
-		"queue":      true,
-		"join":       true,
-		"leave":      true,
-		"position":   true,
-		"endqueue":   true,
-		"clearqueue": true,
-	}
-
 	// Build the list of commands to display
 	for _, cmd := range commands {
-		// Add aliases to the description if any exist
-		desc := cmd.Description
+		// Build command info with name and aliases
+		cmdInfo := fmt.Sprintf("!%s", cmd.Name)
 		if len(cmd.Aliases) > 0 {
-			desc = fmt.Sprintf("%s (aliases: %s)", desc, strings.Join(cmd.Aliases, ", !"))
+			aliases := make([]string, len(cmd.Aliases))
+			for i, alias := range cmd.Aliases {
+				aliases[i] = fmt.Sprintf("!%s", alias)
+			}
+			cmdInfo = fmt.Sprintf("%s (%s)", cmdInfo, strings.Join(aliases, ", "))
 		}
-		cmdInfo := fmt.Sprintf("%s: %s", cmd.Name, desc)
 
-		// Only show base commands when queue is disabled
-		if baseCommands[cmd.Name] && !queue.IsEnabled() {
-			commandList = append(commandList, cmdInfo)
-			// Show queue commands only when queue is enabled
-		} else if queueCommands[cmd.Name] && queue.IsEnabled() {
-			commandList = append(commandList, cmdInfo)
+		// Add description
+		cmdInfo = fmt.Sprintf("%s: %s", cmdInfo, cmd.Description)
+
+		// Add permission info
+		if cmd.ModOnly {
+			cmdInfo = fmt.Sprintf("%s [Mod Only]", cmdInfo)
+		} else if cmd.IsPrivileged {
+			cmdInfo = fmt.Sprintf("%s [Mod/VIP]", cmdInfo)
 		}
+
+		commandList = append(commandList, cmdInfo)
 	}
 
 	if len(commandList) == 0 {
 		return "No commands available."
 	}
 
-	return fmt.Sprintf("Available commands: %s", strings.Join(commandList, " | "))
+	// Group commands by category
+	var baseCommands []string
+	var queueCommands []string
+
+	for _, cmd := range commandList {
+		// Base commands that are always available
+		if strings.Contains(cmd, "help") || strings.Contains(cmd, "ping") || strings.Contains(cmd, "startqueue") {
+			baseCommands = append(baseCommands, cmd)
+		} else {
+			queueCommands = append(queueCommands, cmd)
+		}
+	}
+
+	// Build the response
+	var response strings.Builder
+	response.WriteString("Available commands:\n")
+
+	if len(baseCommands) > 0 {
+		response.WriteString("Base Commands:\n")
+		for _, cmd := range baseCommands {
+			response.WriteString(fmt.Sprintf("• %s\n", cmd))
+		}
+	}
+
+	if queue.IsEnabled() && len(queueCommands) > 0 {
+		response.WriteString("\nQueue Commands:\n")
+		for _, cmd := range queueCommands {
+			response.WriteString(fmt.Sprintf("• %s\n", cmd))
+		}
+	}
+
+	return response.String()
 }
 
 // handlePing checks if the bot is alive
@@ -270,9 +290,29 @@ func handleRemove(message twitch.PrivateMessage, args []string) string {
 	}
 
 	if len(args) < 1 {
-		return "Usage: !remove <username>"
+		return "Usage: !remove <username> or !remove <position>"
 	}
 
+	// Try to parse the argument as a position number
+	position, err := strconv.Atoi(args[0])
+	if err == nil {
+		// If it's a valid number, get the user at that position
+		users := cm.GetQueue().List()
+		if position < 1 || position > len(users) {
+			return fmt.Sprintf("Invalid position. Queue has %d users.", len(users))
+		}
+		username := users[position-1]
+		removed, err := cm.GetQueue().RemoveUser(username)
+		if err != nil {
+			return fmt.Sprintf("Error removing user: %v", err)
+		}
+		if removed {
+			return fmt.Sprintf("%s (position %d) has been removed from the queue!", username, position)
+		}
+		return fmt.Sprintf("Error removing user at position %d", position)
+	}
+
+	// If not a number, treat as username
 	username := args[0]
 	removed, err := cm.GetQueue().RemoveUser(username)
 	if err != nil {
