@@ -383,9 +383,9 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 			// Parse count from message if provided
 			count := 1 // Default to 1 if no count specified
-			if len(args) > 1 {
+			if len(args) > 0 {
 				var err error
-				count, err = strconv.Atoi(args[1])
+				count, err = strconv.Atoi(args[0])
 				if err != nil || count < 1 {
 					return "Invalid count provided. Please specify a positive number."
 				}
