@@ -426,8 +426,8 @@ func handleMove(message twitch.PrivateMessage, args []string) string {
 		return "Queue system is currently disabled."
 	}
 
-	username := args[0]
-	position, err := strconv.Atoi(args[1])
+	username := args[1]
+	position, err := strconv.Atoi(args[2])
 	if err != nil {
 		return "Invalid position number provided."
 	}
@@ -484,7 +484,7 @@ func handleUnpauseQueue(message twitch.PrivateMessage, args []string) string {
 // handleSaveQueue saves the current queue state
 func handleSaveQueue(message twitch.PrivateMessage, args []string) string {
 	queue := commandManager.GetQueue()
-	if err := queue.SaveState("queue_state.json"); err != nil {
+	if err := queue.SaveState("/app/data/queue_state.json"); err != nil {
 		return fmt.Sprintf("Failed to save queue state: %v", err)
 	}
 	return "Queue state has been saved successfully!"
@@ -493,7 +493,7 @@ func handleSaveQueue(message twitch.PrivateMessage, args []string) string {
 // handleRestoreQueue restores the queue state from a saved file
 func handleRestoreQueue(message twitch.PrivateMessage, args []string) string {
 	queue := commandManager.GetQueue()
-	if err := queue.LoadState("queue_state.json"); err != nil {
+	if err := queue.LoadState("/app/data/queue_state.json"); err != nil {
 		return fmt.Sprintf("Failed to restore queue state: %v", err)
 	}
 	return "Queue state has been restored successfully!"
@@ -501,7 +501,7 @@ func handleRestoreQueue(message twitch.PrivateMessage, args []string) string {
 
 // handleDeleteQueue deletes the saved queue state
 func handleDeleteQueue(message twitch.PrivateMessage, args []string) string {
-	if err := os.Remove("queue_state.json"); err != nil {
+	if err := os.Remove("/app/data/queue_state.json"); err != nil {
 		if os.IsNotExist(err) {
 			return "No saved queue state exists to delete."
 		}
