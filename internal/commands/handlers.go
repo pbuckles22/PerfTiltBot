@@ -112,18 +112,38 @@ func handleJoin(message twitch.PrivateMessage, args []string) string {
 		return "Queue system is currently disabled."
 	}
 
-	username := message.User.Name
-	if len(args) > 0 && isPrivileged(message) {
-		username = args[0]
+	// If no arguments provided, add the command user
+	if len(args) == 0 {
+		err := cm.GetQueue().Add(message.User.Name, isPrivileged(message))
+		if err != nil {
+			return fmt.Sprintf("Error joining queue: %v", err)
+		}
+		pos := cm.GetQueue().Position(message.User.Name)
+		return fmt.Sprintf("%s has joined the queue at position %d!", message.User.Name, pos)
 	}
 
-	err := cm.GetQueue().Add(username, isPrivileged(message))
+	// If arguments provided and user is privileged, add all specified users
+	if isPrivileged(message) {
+		var responses []string
+		for _, username := range args {
+			err := cm.GetQueue().Add(username, true)
+			if err != nil {
+				responses = append(responses, fmt.Sprintf("Error adding %s: %v", username, err))
+			} else {
+				pos := cm.GetQueue().Position(username)
+				responses = append(responses, fmt.Sprintf("%s has joined the queue at position %d!", username, pos))
+			}
+		}
+		return strings.Join(responses, " ")
+	}
+
+	// If not privileged, only add the first user
+	err := cm.GetQueue().Add(args[0], false)
 	if err != nil {
 		return fmt.Sprintf("Error joining queue: %v", err)
 	}
-
-	pos := cm.GetQueue().Position(username)
-	return fmt.Sprintf("%s has joined the queue at position %d!", username, pos)
+	pos := cm.GetQueue().Position(args[0])
+	return fmt.Sprintf("%s has joined the queue at position %d!", args[0], pos)
 }
 
 // handleLeave handles the !leave command
