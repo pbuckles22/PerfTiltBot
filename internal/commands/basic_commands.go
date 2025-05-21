@@ -29,6 +29,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 	cm.RegisterCommand(&Command{
 		Name:        "clearqueue",
+		Aliases:     []string{"cq"},
 		Description: "Clear all users from the queue",
 		Handler:     handleClearQueue,
 	})

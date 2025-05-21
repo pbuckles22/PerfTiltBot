@@ -191,10 +191,11 @@ function Start-Bot {
         [string]$CHANNEL
     )
 
-    $CHANNEL_CONFIG = "configs/${CHANNEL}_config_secrets.yaml"
+    $CHANNEL_CONFIG = Join-Path "configs" "${CHANNEL}_config_secrets.yaml"
     $CONTAINER_NAME = "perftiltbot-${CHANNEL}"
-    $BOT_CONFIG = "configs/bot.yaml"
-    $TEMP_SECRETS = "configs/temp_secrets.yaml"
+    $BOT_CONFIG = Join-Path "configs" "bot.yaml"
+    $TEMP_SECRETS = Join-Path "configs" "temp_secrets.yaml"
+    $FINAL_SECRETS = Join-Path "configs" "secrets.yaml"
 
     # Check if channel config exists
     if (-not (Test-Path $CHANNEL_CONFIG)) {
@@ -218,7 +219,7 @@ function Start-Bot {
     }
 
     # Check if bot auth exists
-    $BOT_AUTH = "configs/${BOT_NAME}_auth_secrets.yaml"
+    $BOT_AUTH = Join-Path "configs" "${BOT_NAME}_auth_secrets.yaml"
     if (Test-Path $BOT_AUTH) {
         Write-Host "Found bot authentication for $BOT_NAME"
         # Merge bot auth with channel config
@@ -226,19 +227,19 @@ function Start-Bot {
         # First copy bot auth as base
         Copy-Item $BOT_AUTH $TEMP_SECRETS -Force
         # Then merge channel-specific overrides
-        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' $TEMP_SECRETS $CHANNEL_CONFIG > "configs/secrets.yaml"
+        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' $TEMP_SECRETS $CHANNEL_CONFIG > $FINAL_SECRETS
         Remove-Item $TEMP_SECRETS
         # Explicitly set the channel field to ensure it is present
-        yq eval ".channel = \"$CHANNEL\"" -i "configs/secrets.yaml"
+        yq eval ".channel = \"$CHANNEL\"" -i $FINAL_SECRETS
         # Restructure the YAML to match the expected format in the bot code
-        yq eval '.twitch = {"bot_token": .oauth, "client_id": .client_id, "client_secret": .client_secret, "refresh_token": .refresh_token, "bot_username": .bot_name, "channel": .channel, "data_path": .data_path}' -i "configs/secrets.yaml"
+        yq eval '.twitch = {"bot_token": .oauth, "client_id": .client_id, "client_secret": .client_secret, "refresh_token": .refresh_token, "bot_username": .bot_name, "channel": .channel, "data_path": .data_path}' -i $FINAL_SECRETS
     } else {
         Write-Host "Error: Bot authentication file not found: $BOT_AUTH"
         exit 1
     }
 
     # Validate the final configuration
-    if (-not (Test-Config "configs/secrets.yaml")) {
+    if (-not (Test-Config $FINAL_SECRETS)) {
         Write-Host "Error: Invalid configuration after merging"
         exit 1
     }
@@ -246,8 +247,9 @@ function Start-Bot {
     # Check if container is already running or exists
     $existingContainer = docker ps -a -q -f "name=$CONTAINER_NAME"
     if ($existingContainer) {
-        Write-Host "Container $CONTAINER_NAME already exists. Removing it..."
-        docker rm -f $CONTAINER_NAME
+        Write-Host "Container $CONTAINER_NAME already exists. Stopping and removing it..."
+        docker stop $CONTAINER_NAME
+        docker rm $CONTAINER_NAME
     }
 
     # Run the container

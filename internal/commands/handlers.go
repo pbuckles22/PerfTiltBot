@@ -349,22 +349,30 @@ func handleMove(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("%s has been moved to position %d!", username, position)
 }
 
-// handlePause handles the !pause command
+// handlePause pauses the queue system
 func handlePause(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
+		return "Queue system is not enabled"
+	}
+
 	if err := cm.GetQueue().Pause(); err != nil {
 		return fmt.Sprintf("Error pausing queue: %v", err)
 	}
-	return "Queue system has been paused!"
+	return "Queue is now paused. No new entries can be added until the queue is unpaused."
 }
 
 // handleUnpause handles the !unpause command
 func handleUnpause(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
+	if !cm.GetQueue().IsEnabled() {
+		return "Queue system is not enabled"
+	}
+
 	if err := cm.GetQueue().Unpause(); err != nil {
 		return fmt.Sprintf("Error unpausing queue: %v", err)
 	}
-	return "Queue system has been unpaused!"
+	return "Queue is now open again."
 }
 
 // handleSaveState handles the !save command
@@ -379,10 +387,27 @@ func handleSaveState(message twitch.PrivateMessage, args []string) string {
 // handleLoadState handles the !load command
 func handleLoadState(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
-	if err := cm.GetQueue().LoadState(); err != nil {
+	queue := cm.GetQueue()
+
+	// If queue is disabled, enable it first
+	wasDisabled := !queue.IsEnabled()
+	if wasDisabled {
+		queue.Enable()
+	}
+
+	// Try to restore the saved queue state
+	if err := queue.LoadState(); err != nil {
+		if wasDisabled {
+			return "Queue system has been started!"
+		}
 		return fmt.Sprintf("Error loading queue state: %v", err)
 	}
-	return "Queue state has been loaded!"
+
+	users := queue.List()
+	if wasDisabled {
+		return fmt.Sprintf("Queue system has been started and restored with %d user(s)!", len(users))
+	}
+	return fmt.Sprintf("Queue state has been restored with %d user(s)!", len(users))
 }
 
 // handleKill handles the !kill command
