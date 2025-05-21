@@ -28,6 +28,9 @@ LABEL maintainer="PerfTiltBot Team"
 
 WORKDIR /app
 
+# Install timezone data
+RUN apk add --no-cache tzdata
+
 # Copy the binary from builder
 COPY --from=builder /app/perftiltbot .
 
@@ -38,7 +41,7 @@ RUN mkdir -p /app/configs
 RUN mkdir -p /app/data
 
 # Set environment variables
-ENV TZ=UTC
+ENV TZ=America/New_York
 ENV VERSION=$VERSION
 
 # Run the application
