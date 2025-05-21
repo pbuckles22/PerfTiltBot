@@ -7,11 +7,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/gempir/go-twitch-irc/v4"
+	twitchirc "github.com/gempir/go-twitch-irc/v4"
 	"github.com/pbuckles22/PerfTiltBot/internal/commands"
 	"github.com/pbuckles22/PerfTiltBot/internal/config"
+	"github.com/pbuckles22/PerfTiltBot/internal/twitch"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,6 +23,7 @@ type SecretsConfig struct {
 		BotUsername  string `yaml:"bot_username"`
 		Channel      string `yaml:"channel"`
 		DataPath     string `yaml:"data_path"`
+		RefreshToken string `yaml:"refresh_token"`
 	} `yaml:"twitch"`
 }
 
@@ -112,43 +113,32 @@ func main() {
 	)
 	commands.RegisterBasicCommands(cm)
 
-	// Create Twitch client
-	client := twitch.NewClient(cfg.Twitch.BotUsername, cfg.Twitch.BotToken)
+	// Create auth manager
+	authManager := twitch.NewAuthManager(
+		cfg.Twitch.ClientID,
+		cfg.Twitch.ClientSecret,
+		cfg.Twitch.RefreshToken,
+		"configs/secrets.yaml",
+	)
 
-	// Channel to track successful connection
-	connectionEstablished := make(chan bool)
+	// Create bot instance
+	bot := twitch.NewBot(cfg.Twitch.Channel, authManager, "configs/secrets.yaml", cfg.Twitch.BotUsername)
 
-	// Register handlers
-	client.OnConnect(func() {
-		log.Printf("Successfully connected to Twitch IRC")
-		// Join the channel after connection is established
-		log.Printf("Attempting to join channel: %s", cfg.Twitch.Channel)
-		client.Join(cfg.Twitch.Channel)
-		connectionEstablished <- true
-	})
-
-	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
-		log.Printf("Message from %s: %s", message.User.Name, message.Message)
-
-		// Handle commands
+	// Register command handlers
+	bot.RegisterCommandHandler(func(message twitchirc.PrivateMessage) string {
 		if response, isCommand := cm.HandleMessage(message); isCommand && response != "" {
-			client.Say(message.Channel, response)
+			return response
 		}
+		return ""
 	})
 
-	// Connect to Twitch IRC in a separate goroutine
-	go func() {
-		if err := client.Connect(); err != nil {
-			log.Fatalf("Error connecting to Twitch IRC: %v", err)
-		}
-	}()
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Wait for successful connection
-	select {
-	case <-connectionEstablished:
-		log.Println("Bot is now running. Press Ctrl+C to exit.")
-	case <-time.After(time.Second * 30):
-		log.Fatal("Failed to establish connection within timeout")
+	// Connect to Twitch
+	if err := bot.Connect(ctx); err != nil {
+		log.Fatalf("Error connecting to Twitch: %v", err)
 	}
 
 	// Set up graceful shutdown
@@ -166,27 +156,5 @@ func main() {
 
 	// Graceful shutdown
 	log.Println("Shutting down gracefully...")
-
-	// Send a part message before disconnecting
-	log.Printf("Leaving channel: %s", cfg.Twitch.Channel)
-	client.Depart(cfg.Twitch.Channel)
-
-	// Create a shutdown timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer shutdownCancel()
-
-	// Create a channel to signal disconnect completion
-	done := make(chan bool)
-	go func() {
-		client.Disconnect()
-		done <- true
-	}()
-
-	// Wait for disconnect with timeout
-	select {
-	case <-done:
-		log.Println("Successfully disconnected from Twitch")
-	case <-shutdownCtx.Done():
-		log.Println("Forced shutdown after timeout")
-	}
+	cancel() // Cancel the context to stop token refresh loop
 }

@@ -17,27 +17,36 @@ type Bot struct {
 	client          *twitch.Client
 	commandHandlers []func(twitch.PrivateMessage) string
 	secretsPath     string
+	botUsername     string
 }
 
 // NewBot creates a new Twitch bot instance
-func NewBot(channel string, authManager *AuthManager, secretsPath string) *Bot {
+func NewBot(channel string, authManager *AuthManager, secretsPath string, botUsername string) *Bot {
 	return &Bot{
 		channel:     channel,
 		authManager: authManager,
 		secretsPath: secretsPath,
+		botUsername: botUsername,
 	}
 }
 
 // Connect establishes a connection to Twitch IRC
 func (b *Bot) Connect(ctx context.Context) error {
+	// Force initial token refresh
+	log.Printf("[Token Refresh] Performing initial token refresh...")
+	if err := b.authManager.RefreshToken(); err != nil {
+		return fmt.Errorf("error performing initial token refresh: %w", err)
+	}
+	log.Printf("[Token Refresh] Initial token refresh successful. Expires at: %s", b.authManager.ExpiresAt.Format(time.RFC3339))
+
 	// Get initial access token
 	token, err := b.authManager.GetAccessToken()
 	if err != nil {
 		return fmt.Errorf("error getting initial access token: %w", err)
 	}
 
-	// Create Twitch client
-	b.client = twitch.NewClient("PerfTiltBot", token)
+	// Create Twitch client with bot username and new token
+	b.client = twitch.NewClient(b.botUsername, "oauth:"+token)
 
 	// Set up connection handler
 	b.client.OnConnect(func() {
