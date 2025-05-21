@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,6 +31,8 @@ type AuthManager struct {
 	AccessToken       string
 	ExpiresAt         time.Time
 	SecretsPath       string
+	lastRefreshTime   time.Time
+	etLocation        *time.Location
 }
 
 // tokenURL is the endpoint for token operations
@@ -37,11 +40,19 @@ var tokenURL = "https://id.twitch.tv/oauth2/token"
 
 // NewAuthManager creates a new Twitch authentication manager
 func NewAuthManager(clientID, clientSecret, refreshToken, secretsPath string) *AuthManager {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Printf("Error loading timezone: %v", err)
+		loc = time.UTC
+	}
+
 	return &AuthManager{
 		ClientID:          clientID,
 		ClientSecret:      clientSecret,
 		RefreshTokenValue: refreshToken,
 		SecretsPath:       secretsPath,
+		lastRefreshTime:   time.Now().In(loc),
+		etLocation:        loc,
 	}
 }
 
@@ -79,12 +90,14 @@ func (am *AuthManager) RefreshToken() error {
 
 	am.AccessToken = tokenResp.AccessToken
 	am.RefreshTokenValue = tokenResp.RefreshToken
-	am.ExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	am.ExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).In(am.etLocation)
 
 	// Persist the new refresh token to the secrets file
 	if err := am.persistRefreshToken(); err != nil {
 		return fmt.Errorf("error persisting refresh token: %w", err)
 	}
+
+	am.lastRefreshTime = time.Now().In(am.etLocation)
 
 	return nil
 }
@@ -124,16 +137,26 @@ func (am *AuthManager) persistRefreshToken() error {
 
 // GetAccessToken returns the current access token, refreshing if necessary
 func (am *AuthManager) GetAccessToken() (string, error) {
-	// If token is expired or will expire in the next 5 minutes, refresh it
-	if time.Until(am.ExpiresAt) < 5*time.Minute {
+	if !am.IsTokenValid() {
 		if err := am.RefreshToken(); err != nil {
-			return "", fmt.Errorf("error refreshing token: %w", err)
+			return "", fmt.Errorf("failed to refresh token: %w", err)
 		}
+		am.lastRefreshTime = time.Now().In(am.etLocation)
 	}
 	return am.AccessToken, nil
 }
 
 // IsTokenValid checks if the current token is valid
 func (am *AuthManager) IsTokenValid() bool {
-	return time.Until(am.ExpiresAt) > 5*time.Minute
+	return time.Until(am.ExpiresAt) > 1*time.Minute
+}
+
+// GetLastRefreshTime returns when the token was last refreshed
+func (am *AuthManager) GetLastRefreshTime() time.Time {
+	return am.lastRefreshTime
+}
+
+// GetExpiresAt returns the time when the current token expires
+func (am *AuthManager) GetExpiresAt() time.Time {
+	return am.ExpiresAt
 }

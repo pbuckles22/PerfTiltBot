@@ -105,14 +105,6 @@ func main() {
 
 	log.Printf("Loaded configuration for bot: %s, channel: %s", cfg.Twitch.BotUsername, cfg.Twitch.Channel)
 
-	// Create command manager
-	cm := commands.NewCommandManager(
-		botConfig.Bot.CommandPrefix,
-		cfg.Twitch.DataPath,
-		cfg.Twitch.Channel,
-	)
-	commands.RegisterBasicCommands(cm)
-
 	// Create auth manager
 	authManager := twitch.NewAuthManager(
 		cfg.Twitch.ClientID,
@@ -120,6 +112,16 @@ func main() {
 		cfg.Twitch.RefreshToken,
 		"configs/secrets.yaml",
 	)
+
+	// Create command manager
+	cm := commands.NewCommandManager(
+		botConfig.Bot.CommandPrefix,
+		cfg.Twitch.DataPath,
+		cfg.Twitch.Channel,
+	)
+	commands.RegisterBasicCommands(cm)
+	commands.RegisterUptimeCommand(cm)
+	commands.RegisterAuthCommand(cm, authManager)
 
 	// Create bot instance
 	bot := twitch.NewBot(cfg.Twitch.Channel, authManager, "configs/secrets.yaml", cfg.Twitch.BotUsername)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gempir/go-twitch-irc/v4"
 	"github.com/pbuckles22/PerfTiltBot/internal/config"
@@ -49,6 +50,8 @@ type CommandManager struct {
 	cooldown *CooldownManager
 	// Configuration for command settings
 	config *config.Config
+	// Time when the bot started
+	startTime time.Time
 }
 
 // NewCommandManager creates a new command manager
@@ -59,6 +62,7 @@ func NewCommandManager(prefix string, dataPath string, channel string) *CommandM
 		queue:      queue.NewQueue(dataPath, channel),
 		shutdownCh: make(chan struct{}),
 		cooldown:   NewCooldownManager(),
+		startTime:  time.Now(),
 	}
 	SetCommandManager(cm)
 	return cm
@@ -185,4 +189,9 @@ func (cm *CommandManager) GetCommandList() []Command {
 // This allows commands to interact with the queue system.
 func (cm *CommandManager) GetQueue() *queue.Queue {
 	return cm.queue
+}
+
+// GetBotStartTime returns the time when the bot started
+func (cm *CommandManager) GetBotStartTime() time.Time {
+	return cm.startTime
 }

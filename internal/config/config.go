@@ -17,6 +17,7 @@ type Config struct {
 		BotUsername  string `yaml:"bot_username"`
 		Channel      string `yaml:"channel"`
 		DataPath     string `yaml:"data_path"`
+		Timezone     string `yaml:"timezone"`
 	} `yaml:"twitch"`
 	Commands struct {
 		Queue struct {
@@ -67,6 +68,11 @@ func Load(path string) (*Config, error) {
 	// Set default data path if not specified
 	if config.Twitch.DataPath == "" {
 		config.Twitch.DataPath = fmt.Sprintf("/app/data/%s", config.Twitch.Channel)
+	}
+
+	// Set default timezone if not specified
+	if config.Twitch.Timezone == "" {
+		config.Twitch.Timezone = "America/New_York"
 	}
 
 	// Set default command values if not specified
