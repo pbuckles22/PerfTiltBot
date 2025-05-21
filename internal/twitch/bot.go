@@ -16,13 +16,15 @@ type Bot struct {
 	authManager     *AuthManager
 	client          *twitch.Client
 	commandHandlers []func(twitch.PrivateMessage) string
+	secretsPath     string
 }
 
 // NewBot creates a new Twitch bot instance
-func NewBot(channel string, authManager *AuthManager) *Bot {
+func NewBot(channel string, authManager *AuthManager, secretsPath string) *Bot {
 	return &Bot{
 		channel:     channel,
 		authManager: authManager,
+		secretsPath: secretsPath,
 	}
 }
 
@@ -88,13 +90,21 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			timeUntilExpiry := time.Until(b.authManager.ExpiresAt)
+			log.Printf("[Token Check] Checking token validity. Current expiry: %s (expires in %s)",
+				b.authManager.ExpiresAt.Format(time.RFC3339),
+				timeUntilExpiry.Round(time.Second))
 			if !b.authManager.IsTokenValid() {
+				log.Printf("[Token Refresh] Attempting to refresh Twitch access token...")
 				newToken, err := b.authManager.GetAccessToken()
 				if err != nil {
 					log.Printf("Error refreshing token: %v", err)
 					continue
 				}
 				b.client.SetIRCToken(newToken)
+				log.Printf("[Token Refresh] Token refreshed. New expiry: %s", b.authManager.ExpiresAt.Format(time.RFC3339))
+			} else {
+				log.Printf("[Token Check] Token is still valid")
 			}
 		}
 	}

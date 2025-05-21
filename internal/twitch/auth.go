@@ -6,8 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // TokenResponse represents the response from Twitch's OAuth token endpoint
@@ -26,14 +29,19 @@ type AuthManager struct {
 	RefreshTokenValue string
 	AccessToken       string
 	ExpiresAt         time.Time
+	SecretsPath       string
 }
 
+// tokenURL is the endpoint for token operations
+var tokenURL = "https://id.twitch.tv/oauth2/token"
+
 // NewAuthManager creates a new Twitch authentication manager
-func NewAuthManager(clientID, clientSecret, refreshToken string) *AuthManager {
+func NewAuthManager(clientID, clientSecret, refreshToken, secretsPath string) *AuthManager {
 	return &AuthManager{
 		ClientID:          clientID,
 		ClientSecret:      clientSecret,
 		RefreshTokenValue: refreshToken,
+		SecretsPath:       secretsPath,
 	}
 }
 
@@ -45,7 +53,7 @@ func (am *AuthManager) RefreshToken() error {
 	data.Set("client_id", am.ClientID)
 	data.Set("client_secret", am.ClientSecret)
 
-	req, err := http.NewRequest("POST", "https://id.twitch.tv/oauth2/token", strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}
@@ -72,6 +80,44 @@ func (am *AuthManager) RefreshToken() error {
 	am.AccessToken = tokenResp.AccessToken
 	am.RefreshTokenValue = tokenResp.RefreshToken
 	am.ExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+
+	// Persist the new refresh token to the secrets file
+	if err := am.persistRefreshToken(); err != nil {
+		return fmt.Errorf("error persisting refresh token: %w", err)
+	}
+
+	return nil
+}
+
+// persistRefreshToken saves the new refresh token to the secrets file
+func (am *AuthManager) persistRefreshToken() error {
+	// Read the current secrets file
+	data, err := os.ReadFile(am.SecretsPath)
+	if err != nil {
+		return fmt.Errorf("error reading secrets file: %w", err)
+	}
+
+	// Parse the YAML
+	var secrets map[string]interface{}
+	if err := yaml.Unmarshal(data, &secrets); err != nil {
+		return fmt.Errorf("error parsing secrets file: %w", err)
+	}
+
+	// Update the refresh token
+	if twitch, ok := secrets["twitch"].(map[string]interface{}); ok {
+		twitch["refresh_token"] = am.RefreshTokenValue
+		secrets["twitch"] = twitch
+	}
+
+	// Write back to file
+	newData, err := yaml.Marshal(secrets)
+	if err != nil {
+		return fmt.Errorf("error marshaling secrets: %w", err)
+	}
+
+	if err := os.WriteFile(am.SecretsPath, newData, 0644); err != nil {
+		return fmt.Errorf("error writing secrets file: %w", err)
+	}
 
 	return nil
 }
