@@ -139,31 +139,35 @@ func handleJoin(message twitch.PrivateMessage, args []string) string {
 			return fmt.Sprintf("Error joining queue: %v", err)
 		}
 		pos := cm.GetQueue().Position(message.User.Name)
-		return fmt.Sprintf("%s has joined the queue at position %d!", message.User.Name, pos)
+		total := cm.GetQueue().Size()
+		return fmt.Sprintf("%s has joined the queue at position %d! (Total in queue: %d)", message.User.Name, pos, total)
 	}
 
 	// If arguments provided and user is privileged, add all specified users
 	if isPrivileged(message) {
 		var responses []string
 		for _, username := range args {
+			// Use the exact username provided in the command
 			err := cm.GetQueue().Add(username, true)
 			if err != nil {
 				responses = append(responses, fmt.Sprintf("Error adding %s: %v", username, err))
 			} else {
 				pos := cm.GetQueue().Position(username)
-				responses = append(responses, fmt.Sprintf("%s has joined the queue at position %d!", username, pos))
+				total := cm.GetQueue().Size()
+				responses = append(responses, fmt.Sprintf("%s has joined the queue at position %d! (Total in queue: %d)", username, pos, total))
 			}
 		}
 		return strings.Join(responses, " ")
 	}
 
-	// If not privileged, only add the first user
+	// If not privileged, only add the first user with exact case
 	err := cm.GetQueue().Add(args[0], false)
 	if err != nil {
 		return fmt.Sprintf("Error joining queue: %v", err)
 	}
 	pos := cm.GetQueue().Position(args[0])
-	return fmt.Sprintf("%s has joined the queue at position %d!", args[0], pos)
+	total := cm.GetQueue().Size()
+	return fmt.Sprintf("%s has joined the queue at position %d! (Total in queue: %d)", args[0], pos, total)
 }
 
 // handleLeave handles the !leave command
@@ -178,8 +182,22 @@ func handleLeave(message twitch.PrivateMessage, args []string) string {
 		username = args[0]
 	}
 
-	if cm.GetQueue().Remove(username) {
-		return fmt.Sprintf("%s has left the queue!", username)
+	// Get the current queue to find the exact case of the username
+	users := cm.GetQueue().List()
+	var exactUsername string
+	for _, user := range users {
+		if strings.EqualFold(user, username) {
+			exactUsername = user
+			break
+		}
+	}
+
+	if exactUsername == "" {
+		return fmt.Sprintf("%s is not in the queue!", username)
+	}
+
+	if cm.GetQueue().Remove(exactUsername) {
+		return fmt.Sprintf("%s has left the queue!", exactUsername)
 	}
 	return fmt.Sprintf("%s is not in the queue!", username)
 }
@@ -199,10 +217,10 @@ func handleQueue(message twitch.PrivateMessage, args []string) string {
 	// Build numbered list of users in queue
 	var userList []string
 	for i, user := range users {
-		userList = append(userList, fmt.Sprintf("%d. %s", i+1, user))
+		userList = append(userList, fmt.Sprintf("%d) %s", i+1, user))
 	}
 
-	return fmt.Sprintf("Current queue (%d): %s", len(users), strings.Join(userList, ", "))
+	return fmt.Sprintf("Current Queue (%d): %s", len(users), strings.Join(userList, ", "))
 }
 
 // handlePosition shows a user's position in the queue
@@ -212,11 +230,34 @@ func handlePosition(message twitch.PrivateMessage, args []string) string {
 		return "Queue system is currently disabled."
 	}
 
-	position := queue.Position(message.User.Name)
-	if position == -1 {
-		return fmt.Sprintf("@%s, you are not in the queue!", message.User.Name)
+	// If no arguments, show position of command user
+	if len(args) == 0 {
+		position := queue.Position(message.User.Name)
+		if position == -1 {
+			return fmt.Sprintf("@%s, you are not in the queue!", message.User.Name)
+		}
+		return fmt.Sprintf("@%s, you are at position %d in the queue!", message.User.Name, position)
 	}
-	return fmt.Sprintf("@%s, you are at position %d in the queue!", message.User.Name, position)
+
+	// Try to parse argument as a position number
+	position, err := strconv.Atoi(args[0])
+	if err == nil {
+		// If it's a valid number, get the user at that position
+		users := queue.List()
+		if position < 1 || position > len(users) {
+			return fmt.Sprintf("Invalid position. Queue has %d users.", len(users))
+		}
+		username := users[position-1]
+		return fmt.Sprintf("User at position %d is %s", position, username)
+	}
+
+	// If not a number, treat as username
+	username := args[0]
+	position = queue.Position(username)
+	if position == -1 {
+		return fmt.Sprintf("%s is not in the queue!", username)
+	}
+	return fmt.Sprintf("%s is at position %d in the queue!", username, position)
 }
 
 // handlePop handles the !pop command
@@ -257,31 +298,6 @@ func handlePop(message twitch.PrivateMessage, args []string) string {
 	return response.String()
 }
 
-// handleList handles the !list command
-func handleList(message twitch.PrivateMessage, args []string) string {
-	cm := GetCommandManager()
-	if !cm.GetQueue().IsEnabled() {
-		return "Queue system is currently disabled."
-	}
-
-	users := cm.GetQueue().List()
-	if len(users) == 0 {
-		return "Queue is empty."
-	}
-
-	// Format the response
-	var response strings.Builder
-	response.WriteString("Current queue: ")
-	for i, user := range users {
-		if i > 0 {
-			response.WriteString(", ")
-		}
-		response.WriteString(user)
-	}
-
-	return response.String()
-}
-
 // handleRemove handles the !remove command
 func handleRemove(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
@@ -302,11 +318,7 @@ func handleRemove(message twitch.PrivateMessage, args []string) string {
 			return fmt.Sprintf("Invalid position. Queue has %d users.", len(users))
 		}
 		username := users[position-1]
-		removed, err := cm.GetQueue().RemoveUser(username)
-		if err != nil {
-			return fmt.Sprintf("Error removing user: %v", err)
-		}
-		if removed {
+		if cm.GetQueue().Remove(username) {
 			return fmt.Sprintf("%s (position %d) has been removed from the queue!", username, position)
 		}
 		return fmt.Sprintf("Error removing user at position %d", position)
@@ -314,15 +326,24 @@ func handleRemove(message twitch.PrivateMessage, args []string) string {
 
 	// If not a number, treat as username
 	username := args[0]
-	removed, err := cm.GetQueue().RemoveUser(username)
-	if err != nil {
-		return fmt.Sprintf("Error removing user: %v", err)
+	// Get the current queue to find the exact case of the username
+	users := cm.GetQueue().List()
+	var exactUsername string
+	for _, user := range users {
+		if strings.EqualFold(user, username) {
+			exactUsername = user
+			break
+		}
 	}
 
-	if removed {
-		return fmt.Sprintf("%s has been removed from the queue!", username)
+	if exactUsername == "" {
+		return fmt.Sprintf("%s is not in the queue!", username)
 	}
-	return fmt.Sprintf("%s is not in the queue!", username)
+
+	if cm.GetQueue().Remove(exactUsername) {
+		return fmt.Sprintf("%s has been removed from the queue!", exactUsername)
+	}
+	return fmt.Sprintf("Error removing %s from the queue.", username)
 }
 
 // handleMove handles the !move command
@@ -333,20 +354,49 @@ func handleMove(message twitch.PrivateMessage, args []string) string {
 	}
 
 	if len(args) < 2 {
-		return "Usage: !move <username> <position>"
+		return "Usage: !move <username/position> <position>"
 	}
 
-	username := args[0]
-	position, err := strconv.Atoi(args[1])
+	// Get the current queue
+	users := cm.GetQueue().List()
+	var exactUsername string
+
+	// Try to parse first argument as a position number
+	fromPosition, err := strconv.Atoi(args[0])
+	if err == nil {
+		// If it's a valid number, get the user at that position
+		if fromPosition < 1 || fromPosition > len(users) {
+			return fmt.Sprintf("Invalid from position. Queue has %d users.", len(users))
+		}
+		exactUsername = users[fromPosition-1]
+	} else {
+		// If not a number, treat as username
+		username := args[0]
+		// Find the exact case of the username
+		for _, user := range users {
+			if strings.EqualFold(user, username) {
+				exactUsername = user
+				break
+			}
+		}
+	}
+
+	if exactUsername == "" {
+		return fmt.Sprintf("%s is not in the queue!", args[0])
+	}
+
+	// Parse the target position
+	toPosition, err := strconv.Atoi(args[1])
 	if err != nil {
-		return "Invalid position number provided."
+		return "Invalid target position. Please provide a number."
 	}
 
-	if err := cm.GetQueue().MoveUser(username, position); err != nil {
+	err = cm.GetQueue().MoveUser(exactUsername, toPosition)
+	if err != nil {
 		return fmt.Sprintf("Error moving user: %v", err)
 	}
 
-	return fmt.Sprintf("%s has been moved to position %d!", username, position)
+	return fmt.Sprintf("%s has been moved to position %d!", exactUsername, toPosition)
 }
 
 // handlePause pauses the queue system

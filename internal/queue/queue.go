@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -135,13 +136,14 @@ func (q *Queue) Add(username string, isMod bool) error {
 		return fmt.Errorf("queue system is currently paused")
 	}
 
-	// Check if user is already in queue
+	// Check if user is already in queue (case-insensitive check)
 	for _, user := range q.users {
-		if user == username {
+		if strings.EqualFold(user, username) {
 			return fmt.Errorf("user is already in queue")
 		}
 	}
 
+	// Store the username with its exact capitalization
 	q.users = append(q.users, username)
 	return nil
 }
@@ -152,7 +154,7 @@ func (q *Queue) Remove(username string) bool {
 	defer q.mu.Unlock()
 
 	for i, user := range q.users {
-		if user == username {
+		if strings.EqualFold(user, username) {
 			// Remove user by slicing
 			q.users = append(q.users[:i], q.users[i+1:]...)
 			return true
@@ -185,7 +187,7 @@ func (q *Queue) Position(username string) int {
 	defer q.mu.RUnlock()
 
 	for i, user := range q.users {
-		if user == username {
+		if strings.EqualFold(user, username) {
 			return i + 1
 		}
 	}
@@ -207,7 +209,7 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 
 	// Check if user is already in queue
 	for _, user := range q.users {
-		if user == username {
+		if strings.EqualFold(user, username) {
 			return fmt.Errorf("user is already in queue")
 		}
 	}
@@ -220,7 +222,7 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 		position = len(q.users) + 1
 	}
 
-	// Create new user
+	// Store the username with its exact capitalization
 	newUser := username
 
 	// Insert at position (converting from 1-based to 0-based index)
