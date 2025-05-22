@@ -18,7 +18,7 @@ func (b *Bot) formatTime(t time.Time) string {
 		log.Printf("Error loading timezone %s: %v, falling back to America/New_York", b.cfg.Twitch.Timezone, err)
 		loc, _ = time.LoadLocation("America/New_York")
 	}
-	return t.In(loc).Format("2006-01-02 15:04:05 ET")
+	return t.In(loc).Format("2006-01-02 03:04:05 PM ET")
 }
 
 // Bot represents a Twitch chat bot
@@ -136,6 +136,7 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 	// Calculate initial check interval based on time until expiry
 	timeUntilExpiry := time.Until(b.authManager.ExpiresAt)
 	checkInterval := calculateCheckInterval(timeUntilExpiry)
+	nextCheckTime := time.Now().Add(checkInterval)
 
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
@@ -146,9 +147,13 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			timeUntilExpiry := time.Until(b.authManager.ExpiresAt)
-			log.Printf("[Token Check] Checking token validity. Current expiry: %s (expires in %s)",
+			checkInterval = calculateCheckInterval(timeUntilExpiry)
+			nextCheckTime = time.Now().Add(checkInterval)
+
+			log.Printf("[Token Check] Checking token validity. Current expiry: %s (expires in %s). Next check at: %s",
 				b.formatTime(b.authManager.ExpiresAt),
-				timeUntilExpiry.Round(time.Second))
+				timeUntilExpiry.Round(time.Second),
+				b.formatTime(nextCheckTime))
 
 			// Only refresh if we're within 5 minutes of expiry
 			if timeUntilExpiry <= 5*time.Minute {
@@ -165,9 +170,12 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 				// Update check interval for next check
 				timeUntilExpiry = time.Until(b.authManager.ExpiresAt)
 				checkInterval = calculateCheckInterval(timeUntilExpiry)
+				nextCheckTime = time.Now().Add(checkInterval)
 				ticker.Reset(checkInterval)
 			} else {
-				log.Printf("[Token Check] Token is still valid (expires in %s)", timeUntilExpiry.Round(time.Second))
+				log.Printf("[Token Check] Token is still valid (expires in %s). Next check at: %s",
+					timeUntilExpiry.Round(time.Second),
+					b.formatTime(nextCheckTime))
 			}
 		}
 	}
@@ -176,33 +184,18 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 // calculateCheckInterval determines how often to check token validity
 // based on the remaining time until expiry
 func calculateCheckInterval(timeUntilExpiry time.Duration) time.Duration {
-	// If less than 5 minutes, refresh token immediately
-	if timeUntilExpiry <= 5*time.Minute {
+	// If less than 15 minutes, refresh token immediately
+	if timeUntilExpiry <= 15*time.Minute {
 		return 0 // Will trigger immediate refresh
 	}
 
-	// If less than 10 minutes, check every minute
-	if timeUntilExpiry <= 10*time.Minute {
-		return time.Minute
-	}
-
-	// If less than 20 minutes, check every 2 minutes
-	if timeUntilExpiry <= 20*time.Minute {
-		return 2 * time.Minute
-	}
-
-	// If less than 30 minutes, check every 3 minutes
-	if timeUntilExpiry <= 30*time.Minute {
-		return 3 * time.Minute
-	}
-
-	// If less than 1 hour, check every 5 minutes
-	if timeUntilExpiry <= time.Hour {
-		return 5 * time.Minute
-	}
-
-	// Otherwise, check every 15 minutes
-	return 15 * time.Minute
+	// Calculate next check time as 25% of the current remaining time
+	// For example, with 360 minutes:
+	// First check: 360 - (360 * 0.25) = 270 minutes remaining
+	// Next check: 270 - (270 * 0.25) = 202.5 minutes remaining
+	// Next check: 202.5 - (202.5 * 0.25) = 151.875 minutes remaining
+	// And so on until we hit 15 minutes
+	return timeUntilExpiry * 25 / 100
 }
 
 // RegisterCommandHandler adds a new command handler
