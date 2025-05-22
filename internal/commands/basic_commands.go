@@ -36,6 +36,7 @@ func RegisterBasicCommands(cm *CommandManager) {
 
 	cm.RegisterCommand(&Command{
 		Name:        "queue",
+		Aliases:     []string{"q"},
 		Description: "Show the current queue",
 		Handler:     handleQueue,
 	})
@@ -52,13 +53,6 @@ func RegisterBasicCommands(cm *CommandManager) {
 		Aliases:     []string{"l"},
 		Description: "Leave the queue",
 		Handler:     handleLeave,
-	})
-
-	cm.RegisterCommand(&Command{
-		Name:        "list",
-		Aliases:     []string{"q"},
-		Description: "Show the current queue",
-		Handler:     handleList,
 	})
 
 	cm.RegisterCommand(&Command{

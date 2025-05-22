@@ -192,7 +192,6 @@ function Start-Bot {
     )
 
     $CHANNEL_CONFIG = Join-Path "configs" "${CHANNEL}_config_secrets.yaml"
-    $CONTAINER_NAME = "perftiltbot-${CHANNEL}"
     $BOT_CONFIG = Join-Path "configs" "bot.yaml"
     $TEMP_SECRETS = Join-Path "configs" "temp_secrets.yaml"
     $FINAL_SECRETS = Join-Path "configs" "secrets.yaml"
@@ -211,12 +210,22 @@ function Start-Bot {
         exit 1
     }
 
-    # Extract bot name from channel config
+    # Extract bot name from channel config, preserving case
     $BOT_NAME = (Select-String -Path $CHANNEL_CONFIG -Pattern 'bot_name:' | ForEach-Object { $_.Line -replace '.*bot_name:\s*"([^"]+)".*', '$1' })
     if (-not $BOT_NAME) {
         Write-Host "Error: bot_name not found in $CHANNEL_CONFIG"
         exit 1
     }
+
+    # Extract channel name from config, preserving case
+    $CHANNEL_NAME = (Select-String -Path $CHANNEL_CONFIG -Pattern 'channel:' | ForEach-Object { $_.Line -replace '.*channel:\s*"([^"]+)".*', '$1' })
+    if (-not $CHANNEL_NAME) {
+        Write-Host "Error: channel not found in $CHANNEL_CONFIG"
+        exit 1
+    }
+
+    # Create container name using exact case from configs
+    $CONTAINER_NAME = "${BOT_NAME}-${CHANNEL_NAME}"
 
     # Check if bot auth exists
     $BOT_AUTH = Join-Path "configs" "${BOT_NAME}_auth_secrets.yaml"
@@ -227,10 +236,10 @@ function Start-Bot {
         # First copy bot auth as base
         Copy-Item $BOT_AUTH $TEMP_SECRETS -Force
         # Then merge channel-specific overrides
-        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' $TEMP_SECRETS $CHANNEL_CONFIG > $FINAL_SECRETS
+        yq eval-all "select(fileIndex == 0) * select(fileIndex == 1)" $TEMP_SECRETS $CHANNEL_CONFIG > $FINAL_SECRETS
         Remove-Item $TEMP_SECRETS
         # Explicitly set the channel field to ensure it is present
-        yq eval ".channel = \"$CHANNEL\"" -i $FINAL_SECRETS
+        yq eval ".channel = `"$CHANNEL_NAME`"" -i $FINAL_SECRETS
         # Restructure the YAML to match the expected format in the bot code
         yq eval '.twitch = {"bot_token": .oauth, "client_id": .client_id, "client_secret": .client_secret, "refresh_token": .refresh_token, "bot_username": .bot_name, "channel": .channel, "data_path": .data_path}' -i $FINAL_SECRETS
     } else {
@@ -253,12 +262,12 @@ function Start-Bot {
     }
 
     # Run the container
-    Write-Host "Starting bot for channel: $CHANNEL"
+    Write-Host "Starting bot for channel: $CHANNEL_NAME"
     docker run -d `
         --name $CONTAINER_NAME `
         -v "${PWD}/configs/secrets.yaml:/app/configs/secrets.yaml" `
         -v "${PWD}/configs/bot.yaml:/app/configs/bot.yaml" `
-        -v "perftiltbot-${CHANNEL}-data:/app/data" `
+        -v "${BOT_NAME}-${CHANNEL_NAME}-data:/app/data" `
         perftiltbot
 
     Write-Host "Bot started successfully!"
@@ -271,14 +280,19 @@ function Start-Bot {
 function List-Bots {
     Write-Host "`nRunning PerfTiltBot instances:"
     Write-Host "----------------------------"
-    $containers = docker ps --format "{{.Names}}" | Where-Object { $_ -like "perftiltbot-*" }
+    $containers = docker ps --format "{{.Names}}"
     if ($containers) {
         foreach ($container in $containers) {
-            $channel = $container -replace "perftiltbot-", ""
-            Write-Host "Channel: $channel"
-            Write-Host "Container: $container"
-            Write-Host "Status: Running"
-            Write-Host "----------------------------"
+            # Extract bot name and channel from container name
+            if ($container -match "(.+)-(.+)") {
+                $botName = $matches[1]
+                $channel = $matches[2]
+                Write-Host "Bot: $botName"
+                Write-Host "Channel: $channel"
+                Write-Host "Container: $container"
+                Write-Host "Status: Running"
+                Write-Host "----------------------------"
+            }
         }
     } else {
         Write-Host "No running bot instances found"
@@ -287,11 +301,16 @@ function List-Bots {
 
 # Function to stop all bot instances
 function Stop-All-Bots {
-    Write-Host "Stopping all PerfTiltBot instances..."
-    $containers = docker ps -q -f "name=perftiltbot-*"
+    Write-Host "Stopping all bot instances..."
+    $containers = docker ps -a --format "{{.Names}}"
     if ($containers) {
-        docker stop $containers
-        docker rm $containers
+        foreach ($container in $containers) {
+            if ($container -match "(.+)-(.+)") {
+                Write-Host "Stopping container: $container"
+                docker stop $container
+                docker rm $container
+            }
+        }
         Write-Host "All bot instances stopped and removed"
     } else {
         Write-Host "No running bot instances found"
@@ -304,10 +323,24 @@ function Stop-Channel-Bot {
         [string]$CHANNEL
     )
     
-    $CONTAINER_NAME = "perftiltbot-${CHANNEL}"
+    # Get the bot name from the channel config
+    $CHANNEL_CONFIG = Join-Path "configs" "${CHANNEL}_config_secrets.yaml"
+    if (-not (Test-Path $CHANNEL_CONFIG)) {
+        Write-Host "Error: Channel configuration file not found: $CHANNEL_CONFIG"
+        exit 1
+    }
+
+    # Extract bot name from channel config, preserving case
+    $BOT_NAME = (Select-String -Path $CHANNEL_CONFIG -Pattern 'bot_name:' | ForEach-Object { $_.Line -replace '.*bot_name:\s*"([^"]+)".*', '$1' })
+    if (-not $BOT_NAME) {
+        Write-Host "Error: bot_name not found in $CHANNEL_CONFIG"
+        exit 1
+    }
+
+    $CONTAINER_NAME = "${BOT_NAME}-${CHANNEL}"
     Write-Host "Stopping bot for channel: $CHANNEL"
     
-    $container = docker ps -q -f "name=$CONTAINER_NAME"
+    $container = docker ps -a -q -f "name=$CONTAINER_NAME"
     if ($container) {
         docker stop $CONTAINER_NAME
         docker rm $CONTAINER_NAME

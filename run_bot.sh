@@ -70,11 +70,11 @@ list_channels_by_bot() {
     echo "Channels using bot: $BOT_NAME"
     echo "----------------------------"
     
-    for file in configs/*_secrets.yaml; do
+    for file in configs/*_config_secrets.yaml; do
         if [ -f "$file" ]; then
-            local bot_name=$(grep "bot_name:" "$file" | cut -d'"' -f2)
+            local bot_name=$(grep "bot_name:" "$file" | sed -E 's/.*bot_name:[[:space:]]*"([^"]+)".*/\1/')
             if [ "$bot_name" = "$BOT_NAME" ]; then
-                local channel=$(basename "$file" _secrets.yaml)
+                local channel=$(basename "$file" _config_secrets.yaml)
                 echo "Channel: $channel"
                 echo "Config file: $file"
                 echo "----------------------------"
@@ -133,15 +133,15 @@ update_bot_config() {
 # Function to start a bot for a specific channel
 start_bot() {
     local CHANNEL=$1
-    local SECRETS_FILE="configs/${CHANNEL}_secrets.yaml"
-    local CONTAINER_NAME="perftiltbot-${CHANNEL}"
+    local CHANNEL_CONFIG="configs/${CHANNEL}_config_secrets.yaml"
     local BOT_CONFIG="configs/bot.yaml"
     local TEMP_SECRETS="configs/temp_secrets.yaml"
+    local FINAL_SECRETS="configs/secrets.yaml"
 
-    # Check if secrets file exists
-    if [ ! -f "$SECRETS_FILE" ]; then
-        echo "Error: Secrets file not found: $SECRETS_FILE"
-        echo "Please create a secrets file at: $SECRETS_FILE"
+    # Check if channel config exists
+    if [ ! -f "$CHANNEL_CONFIG" ]; then
+        echo "Error: Channel configuration file not found: $CHANNEL_CONFIG"
+        echo "Please create a channel configuration file at: $CHANNEL_CONFIG"
         exit 1
     fi
 
@@ -152,50 +152,63 @@ start_bot() {
         exit 1
     fi
 
-    # Extract bot name from channel secrets
-    local BOT_NAME=$(grep "bot_name:" "$SECRETS_FILE" | cut -d'"' -f2)
+    # Extract bot name from channel config, preserving case
+    local BOT_NAME=$(grep "bot_name:" "$CHANNEL_CONFIG" | sed -E 's/.*bot_name:[[:space:]]*"([^"]+)".*/\1/')
     if [ -z "$BOT_NAME" ]; then
-        echo "Error: bot_name not found in $SECRETS_FILE"
+        echo "Error: bot_name not found in $CHANNEL_CONFIG"
         exit 1
     fi
 
-    # Check if bot-specific config exists
-    local BOT_SECRETS="configs/${BOT_NAME}_secrets.yaml"
-    if [ -f "$BOT_SECRETS" ]; then
-        echo "Found bot-specific configuration for $BOT_NAME"
-        # Merge bot secrets with channel secrets
+    # Extract channel name from config, preserving case
+    local CHANNEL_NAME=$(grep "channel:" "$CHANNEL_CONFIG" | sed -E 's/.*channel:[[:space:]]*"([^"]+)".*/\1/')
+    if [ -z "$CHANNEL_NAME" ]; then
+        echo "Error: channel not found in $CHANNEL_CONFIG"
+        exit 1
+    fi
+
+    # Create container name using exact case from configs
+    local CONTAINER_NAME="${BOT_NAME}-${CHANNEL_NAME}"
+
+    # Check if bot auth exists
+    local BOT_AUTH="configs/${BOT_NAME}_auth_secrets.yaml"
+    if [ -f "$BOT_AUTH" ]; then
+        echo "Found bot authentication for $BOT_NAME"
+        # Merge bot auth with channel config
         echo "Merging configurations..."
-        # First copy bot secrets as base
-        cp "$BOT_SECRETS" "$TEMP_SECRETS"
+        # First copy bot auth as base
+        cp "$BOT_AUTH" "$TEMP_SECRETS"
         # Then merge channel-specific overrides
-        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$TEMP_SECRETS" "$SECRETS_FILE" > "configs/secrets.yaml"
+        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$TEMP_SECRETS" "$CHANNEL_CONFIG" > "$FINAL_SECRETS"
         rm "$TEMP_SECRETS"
+        # Explicitly set the channel field to ensure it is present
+        yq eval ".channel = \"$CHANNEL_NAME\"" -i "$FINAL_SECRETS"
+        # Restructure the YAML to match the expected format in the bot code
+        yq eval '.twitch = {"bot_token": .oauth, "client_id": .client_id, "client_secret": .client_secret, "refresh_token": .refresh_token, "bot_username": .bot_name, "channel": .channel, "data_path": .data_path}' -i "$FINAL_SECRETS"
     else
-        echo "No bot-specific configuration found, using channel configuration directly"
-        cp "$SECRETS_FILE" "configs/secrets.yaml"
+        echo "Error: Bot authentication file not found: $BOT_AUTH"
+        exit 1
     fi
 
     # Validate the final configuration
-    if ! validate_config "configs/secrets.yaml"; then
+    if ! validate_config "$FINAL_SECRETS"; then
         echo "Error: Invalid configuration after merging"
         exit 1
     fi
 
-    # Check if container is already running
-    if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
-        echo "Container $CONTAINER_NAME is already running"
-        echo "Stopping and removing existing container..."
+    # Check if container is already running or exists
+    if [ "$(docker ps -a -q -f name=$CONTAINER_NAME)" ]; then
+        echo "Container $CONTAINER_NAME already exists. Stopping and removing it..."
         docker stop "$CONTAINER_NAME"
         docker rm "$CONTAINER_NAME"
     fi
 
     # Run the container
-    echo "Starting bot for channel: $CHANNEL"
+    echo "Starting bot for channel: $CHANNEL_NAME"
     docker run -d \
         --name "$CONTAINER_NAME" \
-        -v "${PWD}/configs/secrets.yaml:/app/configs/secrets.yaml" \
-        -v "${PWD}/configs/bot.yaml:/app/configs/bot.yaml" \
-        -v "perftiltbot-${CHANNEL}-data:/app/data" \
+        -v "$(pwd)/configs/secrets.yaml:/app/configs/secrets.yaml" \
+        -v "$(pwd)/configs/bot.yaml:/app/configs/bot.yaml" \
+        -v "${BOT_NAME}-${CHANNEL_NAME}-data:/app/data" \
         perftiltbot
 
     echo "Bot started successfully!"
@@ -206,16 +219,21 @@ start_bot() {
 
 # Function to list all running bot instances
 list_bots() {
-    echo -e "\nRunning PerfTiltBot instances:"
+    echo -e "\nRunning bot instances:"
     echo "----------------------------"
-    local containers=$(docker ps --format "{{.Names}}" | grep "perftiltbot-")
+    local containers=$(docker ps --format "{{.Names}}")
     if [ -n "$containers" ]; then
         echo "$containers" | while read -r container; do
-            local channel=${container#perftiltbot-}
-            echo "Channel: $channel"
-            echo "Container: $container"
-            echo "Status: Running"
-            echo "----------------------------"
+            # Extract bot name and channel from container name
+            if [[ $container =~ (.+)-(.+) ]]; then
+                local bot_name="${BASH_REMATCH[1]}"
+                local channel="${BASH_REMATCH[2]}"
+                echo "Bot: $bot_name"
+                echo "Channel: $channel"
+                echo "Container: $container"
+                echo "Status: Running"
+                echo "----------------------------"
+            fi
         done
     else
         echo "No running bot instances found"
@@ -224,11 +242,16 @@ list_bots() {
 
 # Function to stop all bot instances
 stop_all_bots() {
-    echo "Stopping all PerfTiltBot instances..."
-    local containers=$(docker ps -q -f "name=perftiltbot-")
+    echo "Stopping all bot instances..."
+    local containers=$(docker ps -a --format "{{.Names}}")
     if [ -n "$containers" ]; then
-        docker stop $containers
-        docker rm $containers
+        echo "$containers" | while read -r container; do
+            if [[ $container =~ (.+)-(.+) ]]; then
+                echo "Stopping container: $container"
+                docker stop "$container"
+                docker rm "$container"
+            fi
+        done
         echo "All bot instances stopped and removed"
     else
         echo "No running bot instances found"
@@ -238,10 +261,25 @@ stop_all_bots() {
 # Function to stop a specific channel's bot instance
 stop_channel_bot() {
     local CHANNEL=$1
-    local CONTAINER_NAME="perftiltbot-${CHANNEL}"
+    local CHANNEL_CONFIG="configs/${CHANNEL}_config_secrets.yaml"
+
+    # Check if channel config exists
+    if [ ! -f "$CHANNEL_CONFIG" ]; then
+        echo "Error: Channel configuration file not found: $CHANNEL_CONFIG"
+        exit 1
+    fi
+
+    # Extract bot name from channel config, preserving case
+    local BOT_NAME=$(grep "bot_name:" "$CHANNEL_CONFIG" | sed -E 's/.*bot_name:[[:space:]]*"([^"]+)".*/\1/')
+    if [ -z "$BOT_NAME" ]; then
+        echo "Error: bot_name not found in $CHANNEL_CONFIG"
+        exit 1
+    fi
+
+    local CONTAINER_NAME="${BOT_NAME}-${CHANNEL}"
     echo "Stopping bot for channel: $CHANNEL"
     
-    if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+    if [ "$(docker ps -a -q -f name=$CONTAINER_NAME)" ]; then
         docker stop "$CONTAINER_NAME"
         docker rm "$CONTAINER_NAME"
         echo "Bot stopped and removed for channel: $CHANNEL"

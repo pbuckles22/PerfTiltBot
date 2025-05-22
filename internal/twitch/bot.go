@@ -107,10 +107,21 @@ func (b *Bot) Connect(ctx context.Context) error {
 		}
 	})
 
-	// Start connection in a goroutine
+	// Start connection in a goroutine with reconnection logic
 	go func() {
-		if err := b.client.Connect(); err != nil {
-			log.Printf("Error connecting to Twitch IRC: %v", err)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if err := b.client.Connect(); err != nil {
+					log.Printf("Error connecting to Twitch IRC: %v", err)
+					log.Printf("Attempting to reconnect in 30 seconds...")
+					time.Sleep(30 * time.Second)
+					continue
+				}
+				return
+			}
 		}
 	}()
 
@@ -165,33 +176,33 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 // calculateCheckInterval determines how often to check token validity
 // based on the remaining time until expiry
 func calculateCheckInterval(timeUntilExpiry time.Duration) time.Duration {
-	// If less than 5 minutes, refresh token
+	// If less than 5 minutes, refresh token immediately
 	if timeUntilExpiry <= 5*time.Minute {
 		return 0 // Will trigger immediate refresh
 	}
 
-	// If less than 10 minutes, check every 3 minutes
+	// If less than 10 minutes, check every minute
 	if timeUntilExpiry <= 10*time.Minute {
+		return time.Minute
+	}
+
+	// If less than 20 minutes, check every 2 minutes
+	if timeUntilExpiry <= 20*time.Minute {
+		return 2 * time.Minute
+	}
+
+	// If less than 30 minutes, check every 3 minutes
+	if timeUntilExpiry <= 30*time.Minute {
 		return 3 * time.Minute
 	}
 
-	// If less than 20 minutes, check every 5 minutes
-	if timeUntilExpiry <= 20*time.Minute {
+	// If less than 1 hour, check every 5 minutes
+	if timeUntilExpiry <= time.Hour {
 		return 5 * time.Minute
 	}
 
-	// If less than 30 minutes, check every 7 minutes
-	if timeUntilExpiry <= 30*time.Minute {
-		return 7 * time.Minute
-	}
-
-	// If less than 1 hour, check every 10 minutes
-	if timeUntilExpiry <= time.Hour {
-		return 10 * time.Minute
-	}
-
-	// Otherwise, check every 30 minutes
-	return 30 * time.Minute
+	// Otherwise, check every 15 minutes
+	return 15 * time.Minute
 }
 
 // RegisterCommandHandler adds a new command handler
