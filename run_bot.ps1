@@ -49,6 +49,9 @@
         - Validates the updated configuration
         - Saves the updated configuration
 
+    restart-all
+        Stops and restarts all running bot instances with the latest Docker image.
+
 .EXAMPLES
     # Start a bot for a channel
     .\run_bot.ps1 start pbuckles
@@ -70,6 +73,9 @@
 
     # Update shared bot configuration
     .\run_bot.ps1 update-bot perftiltbot
+
+    # Restart all bots
+    .\run_bot.ps1 restart-all
 
 .NOTES
     - Requires Docker Desktop to be running
@@ -350,6 +356,30 @@ function Stop-Channel-Bot {
     }
 }
 
+# Function to restart all bots
+function Restart-AllBots {
+    Write-Host "Starting bot restart process..."
+    $configs = Get-ChildItem -Path "configs" -Filter "*_config_secrets.yaml"
+    
+    foreach ($config in $configs) {
+        $channel = $config.BaseName -replace "_config_secrets$", ""
+        Write-Host "`nProcessing channel: $channel"
+        
+        # Stop the specific channel
+        Write-Host "Stopping bot for channel: $channel"
+        Stop-Channel-Bot -CHANNEL $channel
+        
+        # Start the channel
+        Write-Host "Starting bot for channel: $channel"
+        Start-Bot -CHANNEL $channel
+        
+        # Wait a moment to ensure the bot is up before moving to the next
+        Start-Sleep -Seconds 2
+    }
+    
+    Write-Host "`nAll bots have been restarted successfully!"
+}
+
 # Main script logic
 if ($args.Count -eq 0) {
     Write-Host "Usage:"
@@ -360,6 +390,7 @@ if ($args.Count -eq 0) {
     Write-Host "  .\run_bot.ps1 stop-all               - Stop all bot instances"
     Write-Host "  .\run_bot.ps1 list-channels <bot>    - List channels using a specific bot"
     Write-Host "  .\run_bot.ps1 update-bot <bot>       - Update shared bot configuration"
+    Write-Host "  .\run_bot.ps1 restart-all            - Stop and restart all bots with latest image"
     Write-Host ""
     Write-Host "Examples:"
     Write-Host "  .\run_bot.ps1 start pbuckles"
@@ -367,6 +398,7 @@ if ($args.Count -eq 0) {
     Write-Host "  .\run_bot.ps1 build"
     Write-Host "  .\run_bot.ps1 list-channels perftiltbot"
     Write-Host "  .\run_bot.ps1 update-bot perftiltbot"
+    Write-Host "  .\run_bot.ps1 restart-all"
     Write-Host ""
     Write-Host "Shortcut:"
     Write-Host "  .\run_bot.ps1 <channel_name>         - Same as 'start <channel_name>'"
@@ -374,9 +406,10 @@ if ($args.Count -eq 0) {
 }
 
 $command = $args[0]
+$channel = $args[1]
 
 # If only one argument is provided and it's not a known command, treat it as a channel name
-if ($args.Count -eq 1 -and $command -notin @("start", "stop-channel", "build", "list", "stop-all", "list-channels", "update-bot")) {
+if ($args.Count -eq 1 -and $command -notin @("start", "stop-channel", "build", "list", "stop-all", "list-channels", "update-bot", "restart-all")) {
     # Check if image exists, build if it doesn't
     $imageExists = docker images -q perftiltbot
     if (-not $imageExists) {
@@ -398,7 +431,7 @@ switch ($command) {
         if (-not $imageExists) {
             Build-Image
         }
-        Start-Bot -CHANNEL $args[1]
+        Start-Bot -CHANNEL $channel
     }
     "stop-channel" {
         if ($args.Count -lt 2) {
@@ -406,7 +439,7 @@ switch ($command) {
             Write-Host "Usage: .\run_bot.ps1 stop-channel <channel_name>"
             exit 1
         }
-        Stop-Channel-Bot -CHANNEL $args[1]
+        Stop-Channel-Bot -CHANNEL $channel
     }
     "build" {
         Build-Image
@@ -423,7 +456,7 @@ switch ($command) {
             Write-Host "Usage: .\run_bot.ps1 list-channels <bot_name>"
             exit 1
         }
-        Get-ChannelsByBot -BotName $args[1]
+        Get-ChannelsByBot -BotName $channel
     }
     "update-bot" {
         if ($args.Count -lt 2) {
@@ -431,7 +464,10 @@ switch ($command) {
             Write-Host "Usage: .\run_bot.ps1 update-bot <bot_name>"
             exit 1
         }
-        Update-BotConfig -BotName $args[1]
+        Update-BotConfig -BotName $channel
+    }
+    "restart-all" {
+        Restart-AllBots
     }
     default {
         Write-Host "Error: Unknown command '$command'"

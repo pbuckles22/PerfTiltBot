@@ -288,89 +288,93 @@ stop_channel_bot() {
     fi
 }
 
+# Function to restart all bots
+restart_all_bots() {
+    echo "Starting bot restart process..."
+    
+    for config in configs/*_config_secrets.yaml; do
+        if [ -f "$config" ]; then
+            channel=$(basename "$config" _config_secrets.yaml)
+            echo -e "\nProcessing channel: $channel"
+            
+            # Stop the specific channel
+            echo "Stopping bot for channel: $channel"
+            stop_channel_bot "$channel"
+            
+            # Start the channel
+            echo "Starting bot for channel: $channel"
+            start_bot "$channel"
+            
+            # Wait a moment to ensure the bot is up before moving to the next
+            sleep 2
+        fi
+    done
+    
+    echo -e "\nAll bots have been restarted successfully!"
+}
+
 # Main script logic
-if [ $# -eq 0 ]; then
-    echo "Usage:"
-    echo "  ./run_bot.sh start <channel_name>    - Start bot for a channel"
-    echo "  ./run_bot.sh stop-channel <channel>  - Stop bot for a specific channel"
-    echo "  ./run_bot.sh build                   - Build Docker image"
-    echo "  ./run_bot.sh list                    - List running bot instances"
-    echo "  ./run_bot.sh stop-all               - Stop all bot instances"
-    echo "  ./run_bot.sh list-channels <bot>    - List channels using a specific bot"
-    echo "  ./run_bot.sh update-bot <bot>       - Update shared bot configuration"
-    echo ""
-    echo "Examples:"
-    echo "  ./run_bot.sh start pbuckles"
-    echo "  ./run_bot.sh stop-channel pbuckles"
-    echo "  ./run_bot.sh build"
-    echo "  ./run_bot.sh list-channels perftiltbot"
-    echo "  ./run_bot.sh update-bot perftiltbot"
-    echo ""
-    echo "Shortcut:"
-    echo "  ./run_bot.sh <channel_name>         - Same as 'start <channel_name>'"
-    exit 1
-fi
+command=$1
+channel=$2
 
-# If only one argument is provided and it's not a known command, treat it as a channel name
-if [ $# -eq 1 ] && [[ ! "$1" =~ ^(start|stop-channel|build|list|stop-all|list-channels|update-bot)$ ]]; then
-    # Check if image exists, build if it doesn't
-    if [ -z "$(docker images -q perftiltbot)" ]; then
-        build_image
-    fi
-    start_bot "$1"
-    exit 0
-fi
-
-# Handle commands
-case "$1" in
+case "$command" in
     "start")
-        if [ $# -lt 2 ]; then
-            echo "Error: Channel name required for start command"
-            echo "Usage: ./run_bot.sh start <channel_name>"
+        if [ -z "$channel" ]; then
+            echo "Error: Channel name required"
             exit 1
         fi
-        # Check if image exists, build if it doesn't
-        if [ -z "$(docker images -q perftiltbot)" ]; then
-            build_image
-        fi
-        start_bot "$2"
+        start_bot "$channel"
         ;;
     "stop-channel")
-        if [ $# -lt 2 ]; then
-            echo "Error: Channel name required for stop-channel command"
-            echo "Usage: ./run_bot.sh stop-channel <channel_name>"
+        if [ -z "$channel" ]; then
+            echo "Error: Channel name required"
             exit 1
         fi
-        stop_channel_bot "$2"
-        ;;
-    "build")
-        build_image
-        ;;
-    "list")
-        list_bots
+        stop_channel_bot "$channel"
         ;;
     "stop-all")
         stop_all_bots
         ;;
+    "list")
+        list_bots
+        ;;
+    "build")
+        build_image
+        ;;
     "list-channels")
-        if [ $# -lt 2 ]; then
-            echo "Error: Bot name required for list-channels command"
-            echo "Usage: ./run_bot.sh list-channels <bot_name>"
+        if [ -z "$channel" ]; then
+            echo "Error: Bot name required"
             exit 1
         fi
-        list_channels_by_bot "$2"
+        list_channels_by_bot "$channel"
         ;;
     "update-bot")
-        if [ $# -lt 2 ]; then
-            echo "Error: Bot name required for update-bot command"
-            echo "Usage: ./run_bot.sh update-bot <bot_name>"
+        if [ -z "$channel" ]; then
+            echo "Error: Bot name required"
             exit 1
         fi
-        update_bot_config "$2"
+        update_bot_config "$channel"
+        ;;
+    "restart-all")
+        restart_all_bots
         ;;
     *)
-        echo "Error: Unknown command '$1'"
-        echo "Run ./run_bot.sh without arguments to see usage"
-        exit 1
+        if [ -n "$command" ] && [ -z "$channel" ]; then
+            # If only one argument is provided, treat it as a channel name
+            start_bot "$command"
+        else
+            echo "Usage: ./run_bot.sh [command] [channel]"
+            echo "Commands:"
+            echo "  start <channel>     - Start a bot instance"
+            echo "  stop-channel <channel> - Stop a specific channel's bot"
+            echo "  stop-all           - Stop all bot instances"
+            echo "  list               - List all running bot instances"
+            echo "  build              - Build the Docker image"
+            echo "  list-channels <bot> - List all channels using a specific bot"
+            echo "  update-bot <bot>   - Update shared bot configuration"
+            echo "  restart-all        - Stop and restart all bots with latest image"
+            echo ""
+            echo "Shortcut: ./run_bot.sh <channel> (same as start)"
+        fi
         ;;
 esac 

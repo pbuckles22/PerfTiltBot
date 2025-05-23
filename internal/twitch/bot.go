@@ -11,6 +11,12 @@ import (
 	"github.com/pbuckles22/PerfTiltBot/internal/config"
 )
 
+// Constants for token refresh
+const (
+	tokenRefreshPercentage = 25               // Check at 25% of remaining time
+	minRefreshTime         = 15 * time.Minute // Minimum time before expiry to refresh
+)
+
 // formatTime formats a time in the channel's configured timezone
 func (b *Bot) formatTime(t time.Time) string {
 	loc, err := time.LoadLocation(b.cfg.Twitch.Timezone)
@@ -66,6 +72,30 @@ func (b *Bot) Connect(ctx context.Context) error {
 	log.Printf("[Startup Token Check] Token expiry: %s (expires in %s)",
 		b.formatTime(b.authManager.ExpiresAt),
 		timeUntilExpiry.Round(time.Second))
+
+	// Calculate and show the complete check schedule
+	remainingTime := timeUntilExpiry
+	currentTime := time.Now()
+	checkNumber := 1
+
+	log.Printf("[Token Check Schedule]")
+	for remainingTime > minRefreshTime {
+		checkInterval := remainingTime * tokenRefreshPercentage / 100
+		nextCheckTime := currentTime.Add(checkInterval)
+		timeAfterCheck := remainingTime - checkInterval
+		log.Printf("  Check %d: %s (in %s, %s remaining after check)",
+			checkNumber,
+			b.formatTime(nextCheckTime),
+			checkInterval.Round(time.Second),
+			timeAfterCheck.Round(time.Second))
+
+		remainingTime -= checkInterval
+		currentTime = nextCheckTime
+		checkNumber++
+	}
+	log.Printf("  Final check: %s (at %s remaining)",
+		b.formatTime(b.authManager.ExpiresAt.Add(-minRefreshTime)),
+		minRefreshTime)
 
 	// Create Twitch client with bot username and new token
 	b.client = twitch.NewClient(b.botUsername, "oauth:"+token)
@@ -138,25 +168,39 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 	checkInterval := calculateCheckInterval(timeUntilExpiry)
 	nextCheckTime := time.Now().Add(checkInterval)
 
+	log.Printf("[Token Refresh Loop] Starting refresh loop. First check at: %s (in %s)",
+		b.formatTime(nextCheckTime),
+		checkInterval.Round(time.Second))
+
 	ticker := time.NewTicker(checkInterval)
-	defer ticker.Stop()
+	defer func() {
+		ticker.Stop()
+		log.Printf("[Token Refresh Loop] Ticker stopped")
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
+			log.Printf("[Token Refresh Loop] Context done, stopping refresh loop")
 			return
 		case <-ticker.C:
+			log.Printf("[Token Refresh Loop] Ticker fired at %s", b.formatTime(time.Now()))
+
+			// Get current time and calculate time until expiry
+			now := time.Now()
 			timeUntilExpiry := time.Until(b.authManager.ExpiresAt)
+
+			// Calculate next check interval and time
 			checkInterval = calculateCheckInterval(timeUntilExpiry)
-			nextCheckTime = time.Now().Add(checkInterval)
+			nextCheckTime = now.Add(checkInterval)
 
 			log.Printf("[Token Check] Checking token validity. Current expiry: %s (expires in %s). Next check at: %s",
 				b.formatTime(b.authManager.ExpiresAt),
 				timeUntilExpiry.Round(time.Second),
 				b.formatTime(nextCheckTime))
 
-			// Only refresh if we're within 5 minutes of expiry
-			if timeUntilExpiry <= 5*time.Minute {
+			// Only refresh if we're within minimum time of expiry
+			if timeUntilExpiry <= minRefreshTime {
 				log.Printf("[Token Refresh] Token expires in %s, refreshing...", timeUntilExpiry.Round(time.Second))
 				newToken, err := b.authManager.GetAccessToken()
 				if err != nil {
@@ -164,14 +208,45 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 					continue
 				}
 				b.client.SetIRCToken("oauth:" + newToken)
-				log.Printf("[Token Refresh] Token refreshed. New expiry: %s",
-					b.formatTime(b.authManager.ExpiresAt))
 
-				// Update check interval for next check
+				// Calculate new check interval based on new token expiry
 				timeUntilExpiry = time.Until(b.authManager.ExpiresAt)
 				checkInterval = calculateCheckInterval(timeUntilExpiry)
-				nextCheckTime = time.Now().Add(checkInterval)
+				nextCheckTime = now.Add(checkInterval)
+
+				log.Printf("[Token Refresh] Token refreshed. New expiry: %s. Starting new check cycle:",
+					b.formatTime(b.authManager.ExpiresAt))
+				log.Printf("  - Next check at: %s (in %s)",
+					b.formatTime(nextCheckTime),
+					checkInterval.Round(time.Second))
+
+				// Reset ticker with new interval
 				ticker.Reset(checkInterval)
+				log.Printf("[Token Refresh Loop] Ticker reset for next check at: %s", b.formatTime(nextCheckTime))
+
+				// Log the complete new check schedule
+				remainingTime := timeUntilExpiry
+				currentTime := now
+				checkNumber := 1
+
+				log.Printf("[New Token Check Schedule]")
+				for remainingTime > minRefreshTime {
+					checkInterval := remainingTime * tokenRefreshPercentage / 100
+					nextCheckTime := currentTime.Add(checkInterval)
+					timeAfterCheck := remainingTime - checkInterval
+					log.Printf("  Check %d: %s (in %s, %s remaining after check)",
+						checkNumber,
+						b.formatTime(nextCheckTime),
+						checkInterval.Round(time.Second),
+						timeAfterCheck.Round(time.Second))
+
+					remainingTime -= checkInterval
+					currentTime = nextCheckTime
+					checkNumber++
+				}
+				log.Printf("  Final check: %s (at %s remaining)",
+					b.formatTime(b.authManager.ExpiresAt.Add(-minRefreshTime)),
+					minRefreshTime)
 			} else {
 				log.Printf("[Token Check] Token is still valid (expires in %s). Next check at: %s",
 					timeUntilExpiry.Round(time.Second),
@@ -184,18 +259,18 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 // calculateCheckInterval determines how often to check token validity
 // based on the remaining time until expiry
 func calculateCheckInterval(timeUntilExpiry time.Duration) time.Duration {
-	// If less than 15 minutes, refresh token immediately
-	if timeUntilExpiry <= 15*time.Minute {
+	// If less than minimum time, refresh token immediately
+	if timeUntilExpiry <= minRefreshTime {
 		return 0 // Will trigger immediate refresh
 	}
 
-	// Calculate next check time as 25% of the current remaining time
-	// For example, with 360 minutes:
-	// First check: 360 - (360 * 0.25) = 270 minutes remaining
-	// Next check: 270 - (270 * 0.25) = 202.5 minutes remaining
-	// Next check: 202.5 - (202.5 * 0.25) = 151.875 minutes remaining
-	// And so on until we hit 15 minutes
-	return timeUntilExpiry * 25 / 100
+	// Calculate next check time as percentage of the current remaining time
+	// For example, with 4 hours and 25%:
+	// First check: 4h - (4h * 0.25) = 3h remaining
+	// Next check: 3h - (3h * 0.25) = 2h15m remaining
+	// Next check: 2h15m - (2h15m * 0.25) = 1h41m15s remaining
+	// And so on until we hit minimum time
+	return timeUntilExpiry * tokenRefreshPercentage / 100
 }
 
 // RegisterCommandHandler adds a new command handler
