@@ -50,4 +50,4 @@ CMD ["./perftiltbot"]
 # Note: For production, mount both secrets.yaml and channel-specific data directory:
 # docker run -v /path/to/secrets.yaml:/app/configs/secrets.yaml \
 #          -v channel_data:/app/data \
-#          perftiltbot 
+#          pbchatbot 

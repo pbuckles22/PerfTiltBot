@@ -34,7 +34,7 @@
 # Function to build the Docker image
 build_image() {
     echo "Building Docker image..."
-    docker build -t perftiltbot .
+    docker build -t pbchatbot .
     if [ $? -ne 0 ]; then
         echo "Error: Failed to build Docker image"
         exit 1
@@ -209,7 +209,7 @@ start_bot() {
         -v "$(pwd)/configs/secrets.yaml:/app/configs/secrets.yaml" \
         -v "$(pwd)/configs/bot.yaml:/app/configs/bot.yaml" \
         -v "${BOT_NAME}-${CHANNEL_NAME}-data:/app/data" \
-        perftiltbot
+        pbchatbot
 
     echo "Bot started successfully!"
     echo "Container name: $CONTAINER_NAME"

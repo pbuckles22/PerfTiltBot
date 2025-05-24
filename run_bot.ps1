@@ -88,7 +88,7 @@
 # Function to build the Docker image
 function Build-Image {
     Write-Host "Building Docker image..."
-    docker build -t perftiltbot .
+    docker build -t pbchatbot .
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: Failed to build Docker image"
         exit 1
@@ -274,7 +274,7 @@ function Start-Bot {
         -v "${PWD}/configs/secrets.yaml:/app/configs/secrets.yaml" `
         -v "${PWD}/configs/bot.yaml:/app/configs/bot.yaml" `
         -v "${BOT_NAME}-${CHANNEL_NAME}-data:/app/data" `
-        perftiltbot
+        pbchatbot
 
     Write-Host "Bot started successfully!"
     Write-Host "Container name: $CONTAINER_NAME"
@@ -411,7 +411,7 @@ $channel = $args[1]
 # If only one argument is provided and it's not a known command, treat it as a channel name
 if ($args.Count -eq 1 -and $command -notin @("start", "stop-channel", "build", "list", "stop-all", "list-channels", "update-bot", "restart-all")) {
     # Check if image exists, build if it doesn't
-    $imageExists = docker images -q perftiltbot
+    $imageExists = docker images -q pbchatbot
     if (-not $imageExists) {
         Build-Image
     }
@@ -427,7 +427,7 @@ switch ($command) {
             exit 1
         }
         # Check if image exists, build if it doesn't
-        $imageExists = docker images -q perftiltbot
+        $imageExists = docker images -q pbchatbot
         if (-not $imageExists) {
             Build-Image
         }
