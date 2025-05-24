@@ -18,14 +18,15 @@ const (
 	minRefreshTime         = 15 * time.Minute // Minimum time before expiry to refresh
 )
 
-// formatTime formats a time in the channel's configured timezone
+// formatTime formats a time in the channel's configured timezone and prints the correct timezone abbreviation
 func (b *Bot) formatTime(t time.Time) string {
 	loc, err := time.LoadLocation(b.cfg.Twitch.Timezone)
 	if err != nil {
 		log.Printf("Error loading timezone %s: %v, falling back to America/New_York", b.cfg.Twitch.Timezone, err)
 		loc, _ = time.LoadLocation("America/New_York")
 	}
-	return t.In(loc).Format("2006-01-02 15:04:05 PM ET")
+	tzTime := t.In(loc)
+	return tzTime.Format("2006-01-02 15:04:05 MST")
 }
 
 // Bot represents a Twitch chat bot
