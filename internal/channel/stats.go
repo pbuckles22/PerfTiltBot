@@ -6,22 +6,25 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
 
 // StreamSession represents a single streaming session
 type StreamSession struct {
-	StartTime      time.Time     `json:"start_time"`
-	EndTime        time.Time     `json:"end_time"`
-	Duration       time.Duration `json:"duration"`
-	Game           string        `json:"game"`
-	Title          string        `json:"title"`
-	Viewers        int           `json:"viewers"`
-	PeakViewers    int           `json:"peak_viewers"`
-	AverageViewers float64       `json:"average_viewers"`
-	ChatMessages   int           `json:"chat_messages"`
-	UniqueChatters int           `json:"unique_chatters"`
+	StartTime      time.Time      `json:"start_time"`
+	EndTime        time.Time      `json:"end_time"`
+	Duration       time.Duration  `json:"duration"`
+	Game           string         `json:"game"`
+	Title          string         `json:"title"`
+	Viewers        int            `json:"viewers"`
+	PeakViewers    int            `json:"peak_viewers"`
+	AverageViewers float64        `json:"average_viewers"`
+	ChatMessages   int            `json:"chat_messages"`
+	UniqueChatters int            `json:"unique_chatters"`
+	ChatterCounts  map[string]int `json:"chatter_counts"` // username -> message count
+	SessionID      string         `json:"session_id"`     // Unique identifier for the session
 }
 
 // ChannelStats tracks overall channel statistics
@@ -35,12 +38,14 @@ type ChannelStats struct {
 	Sessions []StreamSession `json:"sessions"`
 
 	// Overall stats
-	TotalStreamTime   time.Duration `json:"total_stream_time"`
-	TotalSessions     int           `json:"total_sessions"`
-	MaxViewers        int           `json:"max_viewers"`
-	AverageViewers    float64       `json:"average_viewers"`
-	TotalChatMessages int           `json:"total_chat_messages"`
-	UniqueChatters    int           `json:"unique_chatters"`
+	TotalStreamTime   time.Duration  `json:"total_stream_time"`
+	TotalSessions     int            `json:"total_sessions"`
+	MaxViewers        int            `json:"max_viewers"`
+	AverageViewers    float64        `json:"average_viewers"`
+	TotalChatMessages int            `json:"total_chat_messages"`
+	UniqueChatters    int            `json:"unique_chatters"`
+	ChatterTotals     map[string]int `json:"chatter_totals"`   // username -> total messages
+	LastSessionEnd    time.Time      `json:"last_session_end"` // When the last session ended
 
 	// File paths
 	statsPath string
@@ -65,6 +70,26 @@ func (s *ChannelStats) StartSession(game, title string, viewers int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Check if we can resume the previous session
+	if s.canResumePreviousSession(game, title) {
+		// Resume the previous session
+		s.CurrentSession = &StreamSession{
+			StartTime:      s.Sessions[len(s.Sessions)-1].StartTime, // Keep original start time
+			Game:           game,
+			Title:          title,
+			Viewers:        viewers,
+			PeakViewers:    s.Sessions[len(s.Sessions)-1].PeakViewers,
+			AverageViewers: s.Sessions[len(s.Sessions)-1].AverageViewers,
+			ChatMessages:   s.Sessions[len(s.Sessions)-1].ChatMessages,
+			UniqueChatters: s.Sessions[len(s.Sessions)-1].UniqueChatters,
+			ChatterCounts:  s.Sessions[len(s.Sessions)-1].ChatterCounts,
+			SessionID:      s.Sessions[len(s.Sessions)-1].SessionID,
+		}
+		// Remove the previous session from history since we're resuming it
+		s.Sessions = s.Sessions[:len(s.Sessions)-1]
+		return
+	}
+
 	// End any existing session
 	if s.CurrentSession != nil {
 		s.endCurrentSession()
@@ -78,7 +103,33 @@ func (s *ChannelStats) StartSession(game, title string, viewers int) {
 		Viewers:        viewers,
 		PeakViewers:    viewers,
 		AverageViewers: float64(viewers),
+		ChatterCounts:  make(map[string]int),
+		SessionID:      generateSessionID(),
 	}
+}
+
+// canResumePreviousSession checks if we can resume the previous session
+func (s *ChannelStats) canResumePreviousSession(game, title string) bool {
+	if len(s.Sessions) == 0 {
+		return false
+	}
+
+	lastSession := s.Sessions[len(s.Sessions)-1]
+	timeSinceEnd := time.Since(s.LastSessionEnd)
+
+	// Can resume if:
+	// 1. Less than 30 minutes since last session ended
+	// 2. Same game and title
+	// 3. Last session wasn't too long ago (e.g., within last 24 hours)
+	return timeSinceEnd < 30*time.Minute &&
+		lastSession.Game == game &&
+		lastSession.Title == title &&
+		time.Since(lastSession.StartTime) < 24*time.Hour
+}
+
+// generateSessionID creates a unique session identifier
+func generateSessionID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
 // UpdateSession updates the current session with new data
@@ -119,6 +170,20 @@ func (s *ChannelStats) EndSession() {
 	s.endCurrentSession()
 }
 
+// RecordChatMessage records a chat message from a user
+func (s *ChannelStats) RecordChatMessage(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.CurrentSession == nil {
+		return
+	}
+
+	// Update session chatter counts
+	s.CurrentSession.ChatMessages++
+	s.CurrentSession.ChatterCounts[username]++
+}
+
 // endCurrentSession ends the current session and saves it to history
 func (s *ChannelStats) endCurrentSession() {
 	if s.CurrentSession == nil {
@@ -136,7 +201,22 @@ func (s *ChannelStats) endCurrentSession() {
 	s.TotalStreamTime += s.CurrentSession.Duration
 	s.TotalSessions++
 	s.TotalChatMessages += s.CurrentSession.ChatMessages
-	s.UniqueChatters += s.CurrentSession.UniqueChatters
+
+	if s.ChatterTotals == nil {
+		s.ChatterTotals = make(map[string]int)
+	}
+	for user, count := range s.CurrentSession.ChatterCounts {
+		s.ChatterTotals[user] += count
+	}
+
+	// Update unique chatters
+	unique := make(map[string]struct{})
+	for _, session := range s.Sessions {
+		for user := range session.ChatterCounts {
+			unique[user] = struct{}{}
+		}
+	}
+	s.UniqueChatters = len(unique)
 
 	if s.CurrentSession.PeakViewers > s.MaxViewers {
 		s.MaxViewers = s.CurrentSession.PeakViewers
@@ -148,6 +228,9 @@ func (s *ChannelStats) endCurrentSession() {
 		totalViewerTime += session.AverageViewers * session.Duration.Seconds()
 	}
 	s.AverageViewers = totalViewerTime / s.TotalStreamTime.Seconds()
+
+	// Save the end time of this session
+	s.LastSessionEnd = s.CurrentSession.EndTime
 
 	// Save stats
 	if err := s.Save(); err != nil {
@@ -173,11 +256,17 @@ func (s *ChannelStats) GetStats() *ChannelStats {
 		AverageViewers:    s.AverageViewers,
 		TotalChatMessages: s.TotalChatMessages,
 		UniqueChatters:    s.UniqueChatters,
+		ChatterTotals:     make(map[string]int),
 		statsPath:         s.statsPath,
 	}
 
 	// Copy sessions
 	copy(stats.Sessions, s.Sessions)
+
+	// Copy chatter totals
+	for user, count := range s.ChatterTotals {
+		stats.ChatterTotals[user] = count
+	}
 
 	return stats
 }
@@ -267,4 +356,38 @@ func (s *ChannelStats) Load() error {
 	}
 
 	return nil
+}
+
+// GetTopChatters returns the top N chatters by message count
+func (s *ChannelStats) GetTopChatters(n int) []struct {
+	User  string
+	Count int
+} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type pair struct {
+		User  string
+		Count int
+	}
+	var chatters []pair
+	for user, count := range s.ChatterTotals {
+		chatters = append(chatters, pair{user, count})
+	}
+	// Sort descending
+	sort.Slice(chatters, func(i, j int) bool { return chatters[i].Count > chatters[j].Count })
+	if n > len(chatters) {
+		n = len(chatters)
+	}
+	result := make([]struct {
+		User  string
+		Count int
+	}, n)
+	for i := 0; i < n; i++ {
+		result[i] = struct {
+			User  string
+			Count int
+		}{chatters[i].User, chatters[i].Count}
+	}
+	return result
 }
