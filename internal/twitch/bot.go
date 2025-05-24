@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gempir/go-twitch-irc/v4"
+	channelstats "github.com/pbuckles22/PerfTiltBot/internal/channel"
 	"github.com/pbuckles22/PerfTiltBot/internal/config"
 )
 
@@ -37,6 +38,7 @@ type Bot struct {
 	botUsername     string
 	startTime       time.Time
 	cfg             *config.Config
+	channelStats    *channelstats.ChannelStats
 }
 
 // NewBot creates a new Twitch bot instance
@@ -49,13 +51,17 @@ func NewBot(channel string, authManager *AuthManager, secretsPath string, botUse
 		cfg.Twitch.Timezone = "America/New_York" // Default timezone if config fails to load
 	}
 
+	// Initialize channel stats using the same data path as the queue
+	channelStats := channelstats.NewChannelStats(cfg.Twitch.DataPath)
+
 	return &Bot{
-		channel:     channel,
-		authManager: authManager,
-		secretsPath: secretsPath,
-		botUsername: botUsername,
-		startTime:   time.Now(),
-		cfg:         cfg,
+		channel:      channel,
+		authManager:  authManager,
+		secretsPath:  secretsPath,
+		botUsername:  botUsername,
+		startTime:    time.Now(),
+		cfg:          cfg,
+		channelStats: channelStats,
 	}
 }
 
@@ -109,6 +115,8 @@ func (b *Bot) Connect(ctx context.Context) error {
 
 	// Set up message handler
 	b.client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+		// Record chatter stats
+		b.channelStats.RecordChatMessage(message.User.Name)
 		// Check if token needs refresh
 		if !b.authManager.IsTokenValid() {
 			newToken, err := b.authManager.GetAccessToken()
