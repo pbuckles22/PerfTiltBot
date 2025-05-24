@@ -25,7 +25,7 @@ func (b *Bot) formatTime(t time.Time) string {
 		log.Printf("Error loading timezone %s: %v, falling back to America/New_York", b.cfg.Twitch.Timezone, err)
 		loc, _ = time.LoadLocation("America/New_York")
 	}
-	return t.In(loc).Format("2006-01-02 03:04:05 PM ET")
+	return t.In(loc).Format("2006-01-02 15:04:05 PM ET")
 }
 
 // Bot represents a Twitch chat bot
