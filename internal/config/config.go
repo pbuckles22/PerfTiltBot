@@ -9,16 +9,9 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Twitch struct {
-		BotToken     string `yaml:"bot_token"`
-		ClientID     string `yaml:"client_id"`
-		RefreshToken string `yaml:"refresh_token"`
-		ClientSecret string `yaml:"client_secret"`
-		BotUsername  string `yaml:"bot_username"`
-		Channel      string `yaml:"channel"`
-		DataPath     string `yaml:"data_path"`
-		Timezone     string `yaml:"timezone"`
-	} `yaml:"twitch"`
+	BotName  string `yaml:"bot_name"`
+	Channel  string `yaml:"channel"`
+	DataPath string `yaml:"data_path"`
 	Commands struct {
 		Queue struct {
 			MaxSize         int `yaml:"max_size"`
@@ -31,9 +24,6 @@ type Config struct {
 			VIP       int `yaml:"vip"`
 		} `yaml:"cooldowns"`
 	} `yaml:"commands"`
-	APIs struct {
-		ExampleAPIKey string `yaml:"example_api_key"`
-	} `yaml:"apis"`
 }
 
 // Load loads the configuration from a YAML file
@@ -49,30 +39,16 @@ func Load(path string) (*Config, error) {
 	}
 
 	// Validate required fields
-	if config.Twitch.Channel == "" {
+	if config.Channel == "" {
 		return nil, fmt.Errorf("channel is required in config")
 	}
-	if config.Twitch.ClientID == "" {
-		return nil, fmt.Errorf("client_id is required in config")
-	}
-	if config.Twitch.ClientSecret == "" {
-		return nil, fmt.Errorf("client_secret is required in config")
-	}
-	if config.Twitch.RefreshToken == "" {
-		return nil, fmt.Errorf("refresh_token is required in config")
-	}
-	if config.Twitch.BotUsername == "" {
-		return nil, fmt.Errorf("bot_username is required in config")
+	if config.BotName == "" {
+		return nil, fmt.Errorf("bot_name is required in config")
 	}
 
 	// Set default data path if not specified
-	if config.Twitch.DataPath == "" {
-		config.Twitch.DataPath = fmt.Sprintf("/app/data/%s", config.Twitch.Channel)
-	}
-
-	// Set default timezone if not specified
-	if config.Twitch.Timezone == "" {
-		config.Twitch.Timezone = "America/New_York"
+	if config.DataPath == "" {
+		config.DataPath = fmt.Sprintf("/app/data/%s", config.Channel)
 	}
 
 	// Set default command values if not specified

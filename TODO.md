@@ -38,7 +38,7 @@
 ## Permission System
 - [ ] Add more granular permission levels beyond Mod/VIP
 - [ ] Add custom command creation through chat
-- [ ] Add command aliases configuration in bot.yaml
+- [ ] Add command aliases configuration in channel config files
 
 ## Queue Analytics
 - [ ] Add queue history tracking

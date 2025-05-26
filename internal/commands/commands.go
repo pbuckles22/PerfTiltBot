@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gempir/go-twitch-irc/v4"
-	"github.com/pbuckles22/PerfTiltBot/internal/config"
-	"github.com/pbuckles22/PerfTiltBot/internal/queue"
+	twitchirc "github.com/gempir/go-twitch-irc/v4"
+	"github.com/pbuckles22/PBChatBot/internal/config"
+	"github.com/pbuckles22/PBChatBot/internal/queue"
 )
 
 // Command represents a chat command that can be executed by users.
@@ -23,7 +23,7 @@ type Command struct {
 	Description string
 	// Function that executes when the command is triggered
 	// Takes a Twitch message as input and returns a response string
-	Handler func(message twitch.PrivateMessage, args []string) string
+	Handler func(message twitchirc.PrivateMessage, args []string) string
 	// If true, only moderators can use this command
 	ModOnly bool
 	// If true, only privileged users (mods, VIPs, broadcasters) can use this command
@@ -104,7 +104,7 @@ func (cm *CommandManager) RegisterCommand(cmd *Command) {
 
 // isPrivileged checks if a user has moderator, broadcaster, or VIP privileges.
 // These privileges may grant access to restricted commands or special features.
-func isPrivileged(message twitch.PrivateMessage) bool {
+func isPrivileged(message twitchirc.PrivateMessage) bool {
 	return message.User.Badges["moderator"] > 0 ||
 		message.User.Badges["broadcaster"] > 0 ||
 		message.User.Badges["vip"] > 0
@@ -114,7 +114,7 @@ func isPrivileged(message twitch.PrivateMessage) bool {
 // Returns a tuple containing:
 // - response: The message to send back to chat (empty if no response needed)
 // - isCommand: True if the message was a command attempt (even if invalid)
-func (cm *CommandManager) HandleMessage(message twitch.PrivateMessage) (response string, isCommand bool) {
+func (cm *CommandManager) HandleMessage(message twitchirc.PrivateMessage) (response string, isCommand bool) {
 	// Check if the message starts with the command prefix
 	if !strings.HasPrefix(message.Message, cm.prefix) {
 		return "", false

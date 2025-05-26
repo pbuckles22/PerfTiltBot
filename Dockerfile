@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.23.1-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o perftiltbot ./cmd/bot
+RUN CGO_ENABLED=0 GOOS=linux go build -o bot cmd/bot/main.go
 
 # Final stage
 FROM alpine:latest
@@ -24,7 +24,7 @@ FROM alpine:latest
 # Add version label
 ARG VERSION=dev
 LABEL version=$VERSION
-LABEL maintainer="PerfTiltBot Team"
+LABEL maintainer="PBChatBot Team"
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ WORKDIR /app
 RUN apk add --no-cache tzdata
 
 # Copy the binary from builder
-COPY --from=builder /app/perftiltbot .
+COPY --from=builder /app/bot .
 
 # Create configs directory
 RUN mkdir -p /app/configs
@@ -43,11 +43,14 @@ RUN mkdir -p /app/data
 # Set environment variables
 ENV TZ=America/New_York
 ENV VERSION=$VERSION
+ENV CONFIG_PATH=/app/configs
+ENV DATA_PATH=/app/data
 
-# Run the application
-CMD ["./perftiltbot"]
+# Note: For production, mount the bot auth and channel config files:
+# docker run -v /path/to/bot_auth.yaml:/app/configs/bot_auth.yaml \
+#          -v /path/to/channel_config.yaml:/app/configs/channel_config_secrets.yaml \
+#          -v bot-data:/app/data \
+#          pbchatbot
 
-# Note: For production, mount both secrets.yaml and channel-specific data directory:
-# docker run -v /path/to/secrets.yaml:/app/configs/secrets.yaml \
-#          -v channel_data:/app/data \
-#          pbchatbot 
+# Run the bot
+CMD ["./bot"] 

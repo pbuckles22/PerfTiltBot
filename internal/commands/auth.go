@@ -6,8 +6,7 @@ import (
 	"time"
 
 	twitchirc "github.com/gempir/go-twitch-irc/v4"
-	"github.com/pbuckles22/PerfTiltBot/internal/config"
-	twitchauth "github.com/pbuckles22/PerfTiltBot/internal/twitch"
+	twitchauth "github.com/pbuckles22/PBChatBot/internal/twitch"
 )
 
 // formatTimeET formats a time in the channel's configured timezone
@@ -24,33 +23,20 @@ func formatTimeET(t time.Time, timezone string) string {
 func RegisterAuthCommand(cm *CommandManager, authManager *twitchauth.AuthManager) {
 	cm.RegisterCommand(&Command{
 		Name:        "auth",
-		Description: "Shows token authentication information",
+		Description: "Refreshes the bot's authentication token",
 		ModOnly:     true, // Only moderators can use this command
 		Handler: func(message twitchirc.PrivateMessage, args []string) string {
-			// Get the channel's config
-			cfg, err := config.Load("configs/secrets.yaml")
-			if err != nil {
-				log.Printf("Error loading config: %v", err)
-				return "Error loading configuration"
+			// Only allow channel owner to use this command
+			if message.User.Name != message.Channel {
+				return "This command can only be used by the channel owner."
 			}
 
-			// Check if the message is a whisper
-			isWhisper := message.Channel == "jtv"
-
-			// Format the response
-			response := fmt.Sprintf(
-				"Last refresh: %s | Expires: %s | Next check: %s",
-				formatTimeET(authManager.GetLastRefreshTime(), cfg.Twitch.Timezone),
-				formatTimeET(authManager.GetExpiresAt(), cfg.Twitch.Timezone),
-				formatTimeET(time.Now().Add(5*time.Minute), cfg.Twitch.Timezone),
-			)
-
-			// If it's a whisper, prefix with /w
-			if isWhisper {
-				return fmt.Sprintf("/w %s %s", message.User.DisplayName, response)
+			// Refresh the token
+			if err := authManager.RefreshToken(); err != nil {
+				return fmt.Sprintf("Error refreshing token: %v", err)
 			}
 
-			return response
+			return "Token refreshed successfully!"
 		},
 	})
 }

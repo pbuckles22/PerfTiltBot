@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gempir/go-twitch-irc/v4"
-	channelstats "github.com/pbuckles22/PerfTiltBot/internal/channel"
-	"github.com/pbuckles22/PerfTiltBot/internal/config"
+	channelstats "github.com/pbuckles22/PBChatBot/internal/channel"
+	"github.com/pbuckles22/PBChatBot/internal/config"
 )
 
 // Constants for token refresh
@@ -20,10 +20,9 @@ const (
 
 // formatTime formats a time in the channel's configured timezone and prints the correct timezone abbreviation
 func (b *Bot) formatTime(t time.Time) string {
-	loc, err := time.LoadLocation(b.cfg.Twitch.Timezone)
+	loc, err := time.LoadLocation("America/New_York") // Default timezone
 	if err != nil {
-		log.Printf("Error loading timezone %s: %v, falling back to America/New_York", b.cfg.Twitch.Timezone, err)
-		loc, _ = time.LoadLocation("America/New_York")
+		log.Printf("Error loading timezone: %v, falling back to America/New_York", err)
 	}
 	tzTime := t.In(loc)
 	return tzTime.Format("2006-01-02 15:04:05 MST")
@@ -45,15 +44,18 @@ type Bot struct {
 // NewBot creates a new Twitch bot instance
 func NewBot(channel string, authManager *AuthManager, secretsPath string, botUsername string) *Bot {
 	// Load the channel's config
-	cfg, err := config.Load(secretsPath)
+	channelConfigPath := fmt.Sprintf("configs/%s_config_secrets.yaml", channel)
+	cfg, err := config.Load(channelConfigPath)
 	if err != nil {
 		log.Printf("Error loading config: %v", err)
-		cfg = &config.Config{}
-		cfg.Twitch.Timezone = "America/New_York" // Default timezone if config fails to load
+		cfg = &config.Config{
+			Channel:  channel,
+			DataPath: fmt.Sprintf("/app/data/%s", channel),
+		}
 	}
 
 	// Initialize channel stats using the same data path as the queue
-	channelStats := channelstats.NewChannelStats(cfg.Twitch.DataPath)
+	channelStats := channelstats.NewChannelStats(cfg.DataPath)
 
 	return &Bot{
 		channel:      channel,

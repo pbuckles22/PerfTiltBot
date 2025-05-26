@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# PerfTiltBot Management Script
+# PBChatBot Management Script
 #
-# This script manages PerfTiltBot instances for different Twitch channels.
+# This script manages PBChatBot instances for different Twitch channels.
 # It handles building, starting, stopping, and monitoring bot instances.
 #
 # Commands:
@@ -20,8 +20,8 @@
 #   ./run_bot.sh list
 #   ./run_bot.sh stop-all
 #   ./run_bot.sh build
-#   ./run_bot.sh list-channels perftiltbot
-#   ./run_bot.sh update-bot perftiltbot
+#   ./run_bot.sh list-channels pbchatbot
+#   ./run_bot.sh update-bot pbchatbot
 #
 # Shortcut:
 #   ./run_bot.sh <channel_name>  - Same as 'start <channel_name>'
@@ -134,21 +134,11 @@ update_bot_config() {
 start_bot() {
     local CHANNEL=$1
     local CHANNEL_CONFIG="configs/${CHANNEL}_config_secrets.yaml"
-    local BOT_CONFIG="configs/bot.yaml"
-    local TEMP_SECRETS="configs/temp_secrets.yaml"
-    local FINAL_SECRETS="configs/secrets.yaml"
 
     # Check if channel config exists
     if [ ! -f "$CHANNEL_CONFIG" ]; then
         echo "Error: Channel configuration file not found: $CHANNEL_CONFIG"
         echo "Please create a channel configuration file at: $CHANNEL_CONFIG"
-        exit 1
-    fi
-
-    # Check if bot config exists
-    if [ ! -f "$BOT_CONFIG" ]; then
-        echo "Error: Bot configuration file not found: $BOT_CONFIG"
-        echo "Please create a bot configuration file at: $BOT_CONFIG"
         exit 1
     fi
 
@@ -171,27 +161,8 @@ start_bot() {
 
     # Check if bot auth exists
     local BOT_AUTH="configs/${BOT_NAME}_auth_secrets.yaml"
-    if [ -f "$BOT_AUTH" ]; then
-        echo "Found bot authentication for $BOT_NAME"
-        # Merge bot auth with channel config
-        echo "Merging configurations..."
-        # First copy bot auth as base
-        cp "$BOT_AUTH" "$TEMP_SECRETS"
-        # Then merge channel-specific overrides
-        yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$TEMP_SECRETS" "$CHANNEL_CONFIG" > "$FINAL_SECRETS"
-        rm "$TEMP_SECRETS"
-        # Explicitly set the channel field to ensure it is present
-        yq eval ".channel = \"$CHANNEL_NAME\"" -i "$FINAL_SECRETS"
-        # Restructure the YAML to match the expected format in the bot code
-        yq eval '.twitch = {"bot_token": .oauth, "client_id": .client_id, "client_secret": .client_secret, "refresh_token": .refresh_token, "bot_username": .bot_name, "channel": .channel, "data_path": .data_path}' -i "$FINAL_SECRETS"
-    else
+    if [ ! -f "$BOT_AUTH" ]; then
         echo "Error: Bot authentication file not found: $BOT_AUTH"
-        exit 1
-    fi
-
-    # Validate the final configuration
-    if ! validate_config "$FINAL_SECRETS"; then
-        echo "Error: Invalid configuration after merging"
         exit 1
     fi
 
@@ -206,8 +177,9 @@ start_bot() {
     echo "Starting bot for channel: $CHANNEL_NAME"
     docker run -d \
         --name "$CONTAINER_NAME" \
-        -v "$(pwd)/configs/secrets.yaml:/app/configs/secrets.yaml" \
-        -v "$(pwd)/configs/bot.yaml:/app/configs/bot.yaml" \
+        -e "CHANNEL_NAME=$CHANNEL" \
+        -v "$(pwd)/$BOT_AUTH:/app/configs/bot_auth.yaml" \
+        -v "$(pwd)/$CHANNEL_CONFIG:/app/configs/${CHANNEL}_config_secrets.yaml" \
         -v "${BOT_NAME}-${CHANNEL_NAME}-data:/app/data" \
         pbchatbot
 

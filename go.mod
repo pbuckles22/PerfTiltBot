@@ -1,6 +1,6 @@
-module github.com/pbuckles22/PerfTiltBot
+module github.com/pbuckles22/PBChatBot
 
-go 1.23.1
+go 1.21
 
 require (
 	github.com/gempir/go-twitch-irc/v4 v4.0.0
