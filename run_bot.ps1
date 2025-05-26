@@ -74,7 +74,7 @@ function Get-ChannelsByBot {
     Write-Host "Channels using bot: $BotName"
     Write-Host "----------------------------"
     
-    Get-ChildItem -Path "configs\*_config_secrets.yaml" | ForEach-Object {
+    Get-ChildItem -Path "configs\channels\*_config_secrets.yaml" | ForEach-Object {
         $botName = (Select-String -Path $_.FullName -Pattern 'bot_name:' | Select-Object -First 1).Line -replace '.*bot_name:\s*"([^"]+)".*', '$1'
         if ($botName -eq $BotName) {
             $channel = $_.BaseName -replace '_config_secrets$', ''
@@ -96,7 +96,7 @@ function Update-BotConfig {
         [string]$BotName
     )
     
-    $botSecrets = "configs\${BotName}_secrets.yaml"
+    $botSecrets = "configs\bots\${BotName}_auth_secrets.yaml"
     $tempFile = "configs\temp_update.yaml"
     
     if (-not (Test-Path $botSecrets)) {
@@ -139,7 +139,7 @@ function Start-Bot {
         [string]$Channel
     )
     
-    $channelConfig = "configs\${Channel}_config_secrets.yaml"
+    $channelConfig = "configs\channels\${Channel}_config_secrets.yaml"
     
     if (-not (Test-Path $channelConfig)) {
         Write-Host "Error: Channel configuration file not found: ${channelConfig}" -ForegroundColor Red
@@ -165,7 +165,7 @@ function Start-Bot {
     $containerName = "${botName}-${channelName}"
     
     # Check if bot auth exists
-    $botAuth = "configs\${botName}_auth_secrets.yaml"
+    $botAuth = "configs\bots\${botName}_auth_secrets.yaml"
     if (-not (Test-Path $botAuth)) {
         Write-Host "Error: Bot authentication file not found: ${botAuth}" -ForegroundColor Red
         exit 1
@@ -187,8 +187,8 @@ function Start-Bot {
     
     # Create volume mounts with proper syntax
     $volumeMounts = @(
-        "-v", "${botAuthPath}:/app/configs/${botName}_auth_secrets.yaml",
-        "-v", "${channelConfigPath}:/app/configs/${channelName}_config_secrets.yaml:ro",
+        "-v", "${botAuthPath}:/app/configs/bots/${botName}_auth_secrets.yaml",
+        "-v", "${channelConfigPath}:/app/configs/channels/${channelName}_config_secrets.yaml:ro",
         "-v", "${botName}-${channelName}-data:/app/data"
     )
     
@@ -269,7 +269,7 @@ function Stop-ChannelBot {
         [string]$Channel
     )
     
-    $channelConfig = "configs\${Channel}_config_secrets.yaml"
+    $channelConfig = "configs\channels\${Channel}_config_secrets.yaml"
     
     if (-not (Test-Path $channelConfig)) {
         Write-Host "Error: Channel configuration file not found: $channelConfig" -ForegroundColor Red
@@ -299,7 +299,7 @@ function Stop-ChannelBot {
 function Restart-AllBots {
     Write-Host "Starting bot restart process..."
     
-    Get-ChildItem -Path "configs\*_config_secrets.yaml" | ForEach-Object {
+    Get-ChildItem -Path "configs\channels\*_config_secrets.yaml" | ForEach-Object {
         $channel = $_.BaseName -replace '_config_secrets$', ''
         Write-Host "`nProcessing channel: $channel"
         
