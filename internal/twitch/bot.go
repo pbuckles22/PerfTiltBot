@@ -44,7 +44,7 @@ type Bot struct {
 // NewBot creates a new Twitch bot instance
 func NewBot(channel string, authManager *AuthManager, secretsPath string, botUsername string) *Bot {
 	// Load the channel's config
-	channelConfigPath := fmt.Sprintf("configs/%s_config_secrets.yaml", channel)
+	channelConfigPath := fmt.Sprintf("configs/channels/%s_config_secrets.yaml", channel)
 	cfg, err := config.Load(channelConfigPath)
 	if err != nil {
 		log.Printf("Error loading config: %v", err)

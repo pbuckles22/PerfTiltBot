@@ -70,7 +70,7 @@ list_channels_by_bot() {
     echo "Channels using bot: $BOT_NAME"
     echo "----------------------------"
     
-    for file in configs/*_config_secrets.yaml; do
+    for file in configs/channels/*_config_secrets.yaml; do
         if [ -f "$file" ]; then
             local bot_name=$(grep "bot_name:" "$file" | sed -E 's/.*bot_name:[[:space:]]*"([^"]+)".*/\1/')
             if [ "$bot_name" = "$BOT_NAME" ]; then
@@ -91,7 +91,7 @@ list_channels_by_bot() {
 # Function to update shared bot configuration
 update_bot_config() {
     local BOT_NAME=$1
-    local BOT_SECRETS="configs/${BOT_NAME}_secrets.yaml"
+    local BOT_SECRETS="configs/channels/${BOT_NAME}_secrets.yaml"
     local TEMP_FILE="configs/temp_update.yaml"
 
     # Check if bot config exists
@@ -133,7 +133,7 @@ update_bot_config() {
 # Function to start a bot for a specific channel
 start_bot() {
     local CHANNEL=$1
-    local CHANNEL_CONFIG="configs/${CHANNEL}_config_secrets.yaml"
+    local CHANNEL_CONFIG="configs/channels/${CHANNEL}_config_secrets.yaml"
 
     # Check if channel config exists
     if [ ! -f "$CHANNEL_CONFIG" ]; then
@@ -160,7 +160,7 @@ start_bot() {
     local CONTAINER_NAME="${BOT_NAME}-${CHANNEL_NAME}"
 
     # Check if bot auth exists
-    local BOT_AUTH="configs/${BOT_NAME}_auth_secrets.yaml"
+    local BOT_AUTH="configs/bots/${BOT_NAME}_auth_secrets.yaml"
     if [ ! -f "$BOT_AUTH" ]; then
         echo "Error: Bot authentication file not found: $BOT_AUTH"
         exit 1
@@ -178,8 +178,8 @@ start_bot() {
     docker run -d \
         --name "$CONTAINER_NAME" \
         -e "CHANNEL_NAME=$CHANNEL" \
-        -v "$(pwd)/$BOT_AUTH:/app/configs/bot_auth.yaml" \
-        -v "$(pwd)/$CHANNEL_CONFIG:/app/configs/${CHANNEL}_config_secrets.yaml" \
+        -v "$(pwd)/$BOT_AUTH:/app/configs/bots/${BOT_NAME}_auth_secrets.yaml" \
+        -v "$(pwd)/$CHANNEL_CONFIG:/app/configs/channels/${CHANNEL}_config_secrets.yaml" \
         -v "${BOT_NAME}-${CHANNEL_NAME}-data:/app/data" \
         pbchatbot
 
@@ -233,7 +233,7 @@ stop_all_bots() {
 # Function to stop a specific channel's bot instance
 stop_channel_bot() {
     local CHANNEL=$1
-    local CHANNEL_CONFIG="configs/${CHANNEL}_config_secrets.yaml"
+    local CHANNEL_CONFIG="configs/channels/${CHANNEL}_config_secrets.yaml"
 
     # Check if channel config exists
     if [ ! -f "$CHANNEL_CONFIG" ]; then
@@ -264,7 +264,7 @@ stop_channel_bot() {
 restart_all_bots() {
     echo "Starting bot restart process..."
     
-    for config in configs/*_config_secrets.yaml; do
+    for config in configs/channels/*_config_secrets.yaml; do
         if [ -f "$config" ]; then
             channel=$(basename "$config" _config_secrets.yaml)
             echo -e "\nProcessing channel: $channel"

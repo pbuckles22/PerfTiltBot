@@ -113,13 +113,13 @@ func main() {
 	}
 
 	// Load bot auth config
-	botAuthConfig, err := loadBotAuthConfig(fmt.Sprintf("configs/%s_auth_secrets.yaml", botName))
+	botAuthConfig, err := loadBotAuthConfig(fmt.Sprintf("configs/bots/%s_auth_secrets.yaml", botName))
 	if err != nil {
 		log.Fatalf("Failed to load bot auth configuration: %v", err)
 	}
 
 	// Load channel config
-	channelConfig, err := loadChannelConfig(fmt.Sprintf("configs/%s_config_secrets.yaml", channelName))
+	channelConfig, err := loadChannelConfig(fmt.Sprintf("configs/channels/%s_config_secrets.yaml", channelName))
 	if err != nil {
 		log.Fatalf("Failed to load channel configuration: %v", err)
 	}
@@ -138,7 +138,7 @@ func main() {
 		botAuthConfig.ClientID,
 		botAuthConfig.ClientSecret,
 		botAuthConfig.RefreshToken,
-		fmt.Sprintf("configs/%s_auth_secrets.yaml", botName),
+		fmt.Sprintf("configs/bots/%s_auth_secrets.yaml", botName),
 	)
 
 	// Create command manager
@@ -155,7 +155,7 @@ func main() {
 	bot := twitch.NewBot(
 		channelConfig.Channel,
 		authManager,
-		fmt.Sprintf("configs/%s_auth_secrets.yaml", botName),
+		fmt.Sprintf("configs/bots/%s_auth_secrets.yaml", botName),
 		botAuthConfig.BotName,
 	)
 

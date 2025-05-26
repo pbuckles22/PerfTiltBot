@@ -38,11 +38,11 @@ This guide covers setting up and running PBChatBot on Windows.
 ## Configuration
 
 1. **Create bot authentication file**
-   - Create `configs/<bot_name>_auth_secrets.yaml`
+   - Create `configs/bots/<bot_name>_auth_secrets.yaml`
    - See `configs/examples/README.md` for format
 
 2. **Create channel configuration**
-   - Create `configs/<channel>_config_secrets.yaml`
+   - Create `configs/channels/<channel>_config_secrets.yaml`
    - See `configs/examples/README.md` for format
 
 ## Running the Bot

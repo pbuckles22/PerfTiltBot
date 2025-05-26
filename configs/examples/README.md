@@ -20,7 +20,7 @@ If you want to use one bot for multiple channels:
 
 1. Create bot authentication file:
    ```yaml
-   # configs/mychatbot_auth_secrets.yaml
+   # configs/bots/mychatbot_auth_secrets.yaml
    bot_name: "mychatbot"
    oauth: "oauth:your_bot_oauth_token"
    client_id: "your_bot_client_id"
@@ -30,7 +30,7 @@ If you want to use one bot for multiple channels:
 
 2. Create channel configurations:
    ```yaml
-   # configs/channel1_config_secrets.yaml
+   # configs/channels/channel1_config_secrets.yaml
    bot_name: "mychatbot"  # Must match the bot_name in auth file
    channel: "channel1"
    data_path: "/app/data"
@@ -47,7 +47,7 @@ If you want to use one bot for multiple channels:
    ```
 
    ```yaml
-   # configs/channel2_config_secrets.yaml
+   # configs/channels/channel2_config_secrets.yaml
    bot_name: "mychatbot"  # Same bot, different channel
    channel: "channel2"
    data_path: "/app/data"
@@ -69,7 +69,7 @@ If you want to use different bots for different channels:
 
 1. Create bot authentication files:
    ```yaml
-   # configs/bot1_auth_secrets.yaml
+   # configs/bots/bot1_auth_secrets.yaml
    bot_name: "bot1"
    oauth: "oauth:bot1_oauth_token"
    client_id: "bot1_client_id"
@@ -78,7 +78,7 @@ If you want to use different bots for different channels:
    ```
 
    ```yaml
-   # configs/bot2_auth_secrets.yaml
+   # configs/bots/bot2_auth_secrets.yaml
    bot_name: "bot2"
    oauth: "oauth:bot2_oauth_token"
    client_id: "bot2_client_id"
@@ -88,7 +88,7 @@ If you want to use different bots for different channels:
 
 2. Create channel configurations:
    ```yaml
-   # configs/channel1_config_secrets.yaml
+   # configs/channels/channel1_config_secrets.yaml
    bot_name: "bot1"  # Uses bot1
    channel: "channel1"
    data_path: "/app/data"
@@ -105,7 +105,7 @@ If you want to use different bots for different channels:
    ```
 
    ```yaml
-   # configs/channel2_config_secrets.yaml
+   # configs/channels/channel2_config_secrets.yaml
    bot_name: "bot2"  # Uses bot2
    channel: "channel2"
    data_path: "/app/data"

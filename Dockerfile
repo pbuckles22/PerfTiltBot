@@ -47,8 +47,8 @@ ENV CONFIG_PATH=/app/configs
 ENV DATA_PATH=/app/data
 
 # Note: For production, mount the bot auth and channel config files:
-# docker run -v /path/to/bot_auth.yaml:/app/configs/bot_auth.yaml \
-#          -v /path/to/channel_config.yaml:/app/configs/channel_config_secrets.yaml \
+# docker run -v /path/to/bot_auth.yaml:/app/configs/bots/bot_auth_secrets.yaml \
+#          -v /path/to/channel_config.yaml:/app/configs/channels/channel_config_secrets.yaml \
 #          -v bot-data:/app/data \
 #          pbchatbot
 
