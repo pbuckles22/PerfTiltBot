@@ -34,6 +34,7 @@ If you want to use one bot for multiple channels:
    bot_name: "mychatbot"  # Must match the bot_name in auth file
    channel: "channel1"
    data_path: "/app/data"
+   timezone: "America/New_York"  # Timezone for user-facing messages (optional, defaults to EST)
    
    commands:
      queue:
@@ -51,6 +52,7 @@ If you want to use one bot for multiple channels:
    bot_name: "mychatbot"  # Same bot, different channel
    channel: "channel2"
    data_path: "/app/data"
+   timezone: "America/Los_Angeles"  # Timezone for user-facing messages (optional, defaults to EST)
    
    commands:
      queue:
@@ -109,6 +111,7 @@ If you want to use different bots for different channels:
    bot_name: "bot2"  # Uses bot2
    channel: "channel2"
    data_path: "/app/data"
+   timezone: "America/Los_Angeles"  # Timezone for user-facing messages (optional, defaults to EST)
    
    commands:
      queue:
@@ -128,6 +131,10 @@ If you want to use different bots for different channels:
 3. Cooldowns are channel-specific and can be customized per user type
 4. Queue settings are channel-specific and can be customized
 5. The bot name in the channel config must match the bot name in the auth file
+6. **Timezone Configuration**: 
+   - Debug logs are always in PST (America/Los_Angeles) for consistency
+   - User-facing messages use the configured timezone (defaults to EST if not specified)
+   - Common timezone options: `America/New_York` (EST/EDT), `America/Los_Angeles` (PST/PDT), `UTC`
 
 ## Security Notes
 

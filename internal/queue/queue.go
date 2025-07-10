@@ -54,6 +54,7 @@ func (q *Queue) Enable() {
 	q.enabled = true
 	q.paused = false
 	q.users = make([]string, 0) // Clear queue when enabling
+	q.autoSave()                // Auto-save after enabling
 }
 
 // Disable stops the queue system and clears the queue
@@ -63,6 +64,7 @@ func (q *Queue) Disable() {
 	q.enabled = false
 	q.paused = false
 	q.users = make([]string, 0)
+	q.autoSave() // Auto-save after disabling
 }
 
 // Pause pauses the queue system (no new additions allowed)
@@ -79,6 +81,7 @@ func (q *Queue) Pause() error {
 	}
 
 	q.paused = true
+	q.autoSave() // Auto-save after pausing
 	return nil
 }
 
@@ -96,6 +99,7 @@ func (q *Queue) Unpause() error {
 	}
 
 	q.paused = false
+	q.autoSave() // Auto-save after unpausing
 	return nil
 }
 
@@ -120,6 +124,7 @@ func (q *Queue) Clear() int {
 
 	count := len(q.users)
 	q.users = make([]string, 0)
+	q.autoSave() // Auto-save after clearing
 	return count
 }
 
@@ -145,6 +150,7 @@ func (q *Queue) Add(username string, isMod bool) error {
 
 	// Store the username with its exact capitalization
 	q.users = append(q.users, username)
+	q.autoSave() // Auto-save after adding user
 	return nil
 }
 
@@ -157,6 +163,7 @@ func (q *Queue) Remove(username string) bool {
 		if strings.EqualFold(user, username) {
 			// Remove user by slicing
 			q.users = append(q.users[:i], q.users[i+1:]...)
+			q.autoSave() // Auto-save after removing user
 			return true
 		}
 	}
@@ -234,6 +241,7 @@ func (q *Queue) AddAtPosition(username string, position int, isMod bool) error {
 		// Insert at position
 		q.users = append(q.users[:position], append([]string{newUser}, q.users[position:]...)...)
 	}
+	q.autoSave() // Auto-save after adding user at position
 	return nil
 }
 
@@ -255,6 +263,7 @@ func (q *Queue) Pop() (string, error) {
 
 	// Remove first user
 	q.users = q.users[1:]
+	q.autoSave() // Auto-save after popping user
 
 	return user, nil
 }
@@ -283,6 +292,7 @@ func (q *Queue) PopN(count int) ([]string, error) {
 
 	// Remove first N users
 	q.users = q.users[count:]
+	q.autoSave() // Auto-save after popping users
 
 	return users, nil
 }
@@ -300,6 +310,7 @@ func (q *Queue) RemoveUser(username string) (bool, error) {
 		if user == username {
 			// Remove the user from the queue
 			q.users = append(q.users[:i], q.users[i+1:]...)
+			q.autoSave() // Auto-save after removing user
 			return true, nil
 		}
 	}
@@ -353,6 +364,7 @@ func (q *Queue) MoveUser(username string, position int) error {
 
 	// Insert at new position
 	q.users = append(q.users[:position], append([]string{user}, q.users[position:]...)...)
+	q.autoSave() // Auto-save after moving user
 
 	return nil
 }
@@ -392,8 +404,21 @@ func (q *Queue) MoveToEnd(username string) error {
 
 	// Add to end
 	q.users = append(q.users, user)
+	q.autoSave() // Auto-save after moving user to end
 
 	return nil
+}
+
+// autoSave automatically saves the queue state after modifications
+// This method should be called after any queue modification operation
+func (q *Queue) autoSave() {
+	// Use a goroutine to avoid blocking the main operation
+	go func() {
+		if err := q.SaveState(); err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Auto-save failed: %v\n", err)
+		}
+	}()
 }
 
 // SaveState saves the current queue state to a file

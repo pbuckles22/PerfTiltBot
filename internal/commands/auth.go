@@ -2,21 +2,16 @@ package commands
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	twitchirc "github.com/gempir/go-twitch-irc/v4"
 	twitchauth "github.com/pbuckles22/PBChatBot/internal/twitch"
+	"github.com/pbuckles22/PBChatBot/internal/utils"
 )
 
 // formatTimeET formats a time in the channel's configured timezone
 func formatTimeET(t time.Time, timezone string) string {
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		log.Printf("Error loading timezone %s: %v, falling back to America/New_York", timezone, err)
-		loc, _ = time.LoadLocation("America/New_York")
-	}
-	return t.In(loc).Format("2006-01-02 15:04:05 ET")
+	return utils.FormatTimeForDisplay(t, timezone)
 }
 
 // RegisterAuthCommand registers the auth command

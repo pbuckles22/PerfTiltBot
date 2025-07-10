@@ -12,6 +12,7 @@ type Config struct {
 	BotName  string `yaml:"bot_name"`
 	Channel  string `yaml:"channel"`
 	DataPath string `yaml:"data_path"`
+	Timezone string `yaml:"timezone"` // Timezone for user-facing messages (e.g., "America/New_York", "America/Los_Angeles")
 	Commands struct {
 		Queue struct {
 			MaxSize         int `yaml:"max_size"`
@@ -49,6 +50,11 @@ func Load(path string) (*Config, error) {
 	// Set default data path if not specified
 	if config.DataPath == "" {
 		config.DataPath = fmt.Sprintf("/app/data/%s", config.Channel)
+	}
+
+	// Set default timezone if not specified
+	if config.Timezone == "" {
+		config.Timezone = "America/New_York" // Default to EST/EDT
 	}
 
 	// Set default command values if not specified

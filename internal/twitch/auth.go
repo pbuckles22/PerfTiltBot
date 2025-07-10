@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pbuckles22/PBChatBot/internal/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,11 +41,7 @@ var tokenURL = "https://id.twitch.tv/oauth2/token"
 
 // NewAuthManager creates a new Twitch authentication manager
 func NewAuthManager(clientID, clientSecret, refreshToken, secretsPath string) *AuthManager {
-	loc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		log.Printf("Error loading timezone: %v", err)
-		loc = time.UTC
-	}
+	loc := utils.GetLogLocation()
 
 	return &AuthManager{
 		ClientID:          clientID,
@@ -138,17 +135,21 @@ func (am *AuthManager) persistRefreshToken() error {
 // GetAccessToken returns the current access token, refreshing if necessary
 func (am *AuthManager) GetAccessToken() (string, error) {
 	if !am.IsTokenValid() {
+		log.Printf("[Auth] Refreshing token...")
 		if err := am.RefreshToken(); err != nil {
 			return "", fmt.Errorf("failed to refresh token: %w", err)
 		}
 		am.lastRefreshTime = time.Now().In(am.etLocation)
+		log.Printf("[Auth] Token refreshed successfully")
+		log.Printf("") // Blank line after auth refresh
 	}
 	return am.AccessToken, nil
 }
 
 // IsTokenValid checks if the current token is valid
 func (am *AuthManager) IsTokenValid() bool {
-	return time.Until(am.ExpiresAt) > 1*time.Minute
+	timeUntilExpiry := time.Until(am.ExpiresAt)
+	return timeUntilExpiry > 1*time.Minute
 }
 
 // GetLastRefreshTime returns when the token was last refreshed

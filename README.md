@@ -1,6 +1,6 @@
-# PBChatBot
+# PerfTiltBot
 
-A Twitch chat bot for managing queues and other channel features.
+A Twitch chat bot for queue management with automatic token refresh and timezone support.
 
 ## Documentation
 
@@ -20,77 +20,143 @@ A Twitch chat bot for managing queues and other channel features.
    - Docker Desktop (Windows/macOS)
    - Docker Engine (Linux)
 
-## Quick Start
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/pbuckles22/PBChatBot.git
-   cd PBChatBot
-   ```
-
-2. **Create configuration files**
-   - See [Configuration Examples](configs/examples/README.md) for details
-
-3. **Run the bot**
-   ```bash
-   # Using bash script (Linux/macOS)
-   ./run_bot.sh start <channel>
-
-   # Using PowerShell script (Windows)
-   .\run_bot.ps1 start <channel>
-   ```
-
 ## Features
 
-- Queue management
-- Command cooldowns
-- User permissions
-- Channel-specific settings
-- Docker support
-- AWS deployment
+- **Queue Management**: Join, leave, move, and manage user queues
+- **Auto-Save**: Queue state automatically saved after every modification
+- **Timezone Support**: Configurable timezone for user messages, consistent PST logging
+- **Token Auto-Refresh**: Automatic OAuth token refresh with configurable intervals
+- **Permission System**: Different command access for regular users, VIPs, moderators, and broadcasters
+- **Cooldown Management**: Configurable cooldowns per user type
+- **Multi-Channel Support**: Run multiple channels with different configurations
+
+## Recent Updates
+
+### v2.0.0
+- **Auto-Save Queue State**: Queue is automatically saved after every modification (add, remove, move, pop, etc.)
+- **Timezone Configuration**: 
+  - Debug logs always in PST for consistency
+  - User-facing messages use configurable timezone (defaults to EST)
+- **Improved Token Refresh**: Fixed panic issues and improved logging
+- **Cleaner Logs**: Simplified debug output with better formatting
+
+## Quick Start
+
+1. **Build the Docker image**:
+   ```bash
+   ./run_bot.sh build
+   ```
+
+2. **Start a bot for a channel**:
+   ```bash
+   ./run_bot.sh start <channel_name>
+   ```
+
+3. **View running bots**:
+   ```bash
+   ./run_bot.sh list
+   ```
+
+## Configuration
+
+### Channel Configuration
+Create a channel config file: `configs/channels/<channel>_config_secrets.yaml`
+
+```yaml
+bot_name: "mybot"
+channel: "PerfectTilt"
+data_path: "/app/data"
+timezone: "America/New_York"  # Optional: defaults to EST
+
+commands:
+  queue:
+    max_size: 100
+    default_position: 1
+    default_pop_count: 1
+  cooldowns:
+    default: 5
+    moderator: 2
+    vip: 3
+```
+
+### Bot Authentication
+Create a bot auth file: `configs/bots/<bot_name>_auth_secrets.yaml`
+
+```yaml
+bot_name: "mybot"
+oauth: "oauth:your_bot_oauth_token"
+client_id: "your_bot_client_id"
+client_secret: "your_bot_client_secret"
+refresh_token: "your_refresh_token"
+```
+
+## Commands
+
+See [Commands Documentation](docs/commands.md) for a complete list of available commands.
+
+### Basic Commands
+- `!help` - Show available commands
+- `!join` - Join the queue
+- `!queue` - Show current queue
+- `!position` - Show your position
+
+### Moderator Commands
+- `!startqueue` - Start queue system
+- `!pop` - Remove users from queue
+- `!move` - Move users in queue
+- `!savequeue` - Save queue state
 
 ## Development
 
-1. **Build**
-   ```bash
-   # Build for current platform
-   go build -o bot cmd/bot/main.go
+### Building
+```bash
+# Build Docker image
+./run_bot.sh build
 
-   # Build Docker image
-   docker build -t pbchatbot .
-   ```
+# Run locally
+go run cmd/bot/main.go
+```
 
-2. **Test**
-   ```bash
-   go test ./...
-   ```
+### Testing
+```bash
+# Run tests
+go test ./...
+```
 
-3. **Run**
-   ```bash
-   # Run locally
-   ./bot
+## Docker Commands
 
-   # Run in Docker
-   docker run -d \
-       --name pbchatbot \
-       -v $(pwd)/configs:/app/configs \
-       -v pbchatbot-data:/app/data \
-       pbchatbot
-   ```
+```bash
+# Start bot for channel
+./run_bot.sh start <channel>
 
-## Platform-Specific Guides
+# Stop specific channel
+./run_bot.sh stop-channel <channel>
 
-- [Windows Setup Guide](docs/windows.md) - Windows-specific setup and usage instructions
-- [AWS Deployment Guide](docs/aws.md) - AWS deployment and management instructions
+# Stop all bots
+./run_bot.sh stop-all
 
-## Contributing
+# List running bots
+./run_bot.sh list
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+# Restart all bots
+./run_bot.sh restart-all
+```
+
+## Architecture
+
+- **Queue System**: Persistent queue with auto-save functionality
+- **Token Management**: Automatic OAuth refresh with configurable intervals
+- **Command System**: Modular command handlers with permission checks
+- **Timezone Support**: Separate timezone handling for logs vs user display
+- **Configuration**: YAML-based configuration per channel
+
+## Security
+
+- OAuth tokens are automatically refreshed
+- Channel-specific data isolation
+- Permission-based command access
+- Secure configuration file handling
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+See [LICENSE](LICENSE) file for details. 

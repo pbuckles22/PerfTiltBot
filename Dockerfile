@@ -41,7 +41,7 @@ RUN mkdir -p /app/configs
 RUN mkdir -p /app/data
 
 # Set environment variables
-ENV TZ=America/New_York
+ENV TZ=America/Los_Angeles
 ENV VERSION=$VERSION
 ENV CONFIG_PATH=/app/configs
 ENV DATA_PATH=/app/data
