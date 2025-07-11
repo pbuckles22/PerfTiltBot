@@ -223,6 +223,13 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 					timeUntilExpiry.Round(time.Second),
 					checkInterval.Round(time.Second))
 
+				// Reset ticker with new interval (ensure positive interval)
+				if checkInterval <= 0 {
+					log.Printf("[Token Refresh Loop] WARNING: Calculated interval is %v, using 1 second instead", checkInterval)
+					checkInterval = 1 * time.Second
+				}
+				ticker.Reset(checkInterval)
+
 				log.Printf("") // Blank line after valid check
 			}
 		}

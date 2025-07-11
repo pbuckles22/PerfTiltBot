@@ -1,7 +1,11 @@
 # Build stage
-FROM golang:1.23.1-alpine AS builder
+FROM golang:alpine AS builder
+#FROM golang:1.23.8-alpine AS builder
 
 WORKDIR /app
+
+# Update and upgrade all packages to get latest security fixes
+RUN apk update && apk upgrade
 
 # Install git and build dependencies
 RUN apk add --no-cache git

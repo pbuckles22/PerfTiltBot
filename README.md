@@ -157,6 +157,14 @@ go test ./...
 - Permission-based command access
 - Secure configuration file handling
 
+## Security Notes
+
+- The bot's Docker image is regularly rebuilt with the latest Alpine and Go security patches.
+- If a CVE is present in Alpine or Go, it may take a few days for the fix to appear in the official Alpine repositories.
+- To minimize risk, always rebuild your image after a security fix is published.
+- For critical CVEs, you may use Alpine edge/testing repositories, but this is not recommended for production due to stability concerns.
+- See the Changelog for recent security-related updates.
+
 ## License
 
 See [LICENSE](LICENSE) file for details. 
