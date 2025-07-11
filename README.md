@@ -82,6 +82,9 @@ commands:
 ### Bot Authentication
 Create a bot auth file: `configs/bots/<bot_name>_auth_secrets.yaml`
 
+**How to get your client_id, client_secret, access token, and refresh token:**
+See [docs/twitch_bot_oauth.md](docs/twitch_bot_oauth.md) for a step-by-step guide.
+
 ```yaml
 bot_name: "mybot"
 oauth: "oauth:your_bot_oauth_token"
@@ -167,4 +170,8 @@ go test ./...
 
 ## License
 
-See [LICENSE](LICENSE) file for details. 
+See [LICENSE](LICENSE) file for details.
+
+## Authentication & OAuth
+
+For step-by-step instructions on obtaining a Twitch OAuth access token and refresh token for your bot, see [docs/twitch_bot_oauth.md](docs/twitch_bot_oauth.md). 
