@@ -52,7 +52,7 @@
 - [ ] Add configuration file documentation
 - [ ] Add development guide for contributors
 - [ ] Enhance command aliases (e.g., !j for !join)
-- [ ] Allow !join to accept multiple user names as arguments
+- [ ] Allow !join to accept multiple user names as arguments 
 
 ## Multi-Channel Bot (One Container, Multiple Channels)
 
