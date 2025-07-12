@@ -184,9 +184,6 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 			// Calculate time until expiry
 			timeUntilExpiry := time.Until(b.authManager.ExpiresAt)
 
-			// Calculate next check interval and time
-			checkInterval = calculateCheckInterval(timeUntilExpiry)
-
 			// Only refresh if we're within minimum time of expiry
 			if timeUntilExpiry <= minRefreshTime {
 				log.Printf("[Token] Refreshing (expires in %s)", timeUntilExpiry.Round(time.Second))
@@ -210,7 +207,7 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 					b.formatTimeForLogs(b.authManager.ExpiresAt),
 					checkInterval.Round(time.Second))
 
-				// Reset ticker with new interval (ensure positive interval)
+				// Reset ticker with new interval based on fresh token expiry
 				if checkInterval <= 0 {
 					log.Printf("[Token Refresh Loop] WARNING: Calculated interval is %v, using 1 second instead", checkInterval)
 					checkInterval = 1 * time.Second
@@ -222,6 +219,9 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 				log.Printf("[Token] Valid (expires in %s, next check in %s)",
 					timeUntilExpiry.Round(time.Second),
 					checkInterval.Round(time.Second))
+
+				// Calculate next check interval for the next tick
+				checkInterval = calculateCheckInterval(timeUntilExpiry)
 
 				// Reset ticker with new interval (ensure positive interval)
 				if checkInterval <= 0 {
