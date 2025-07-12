@@ -53,8 +53,8 @@ func (q *Queue) Enable() {
 	defer q.mu.Unlock()
 	q.enabled = true
 	q.paused = false
-	q.users = make([]string, 0) // Clear queue when enabling
-	q.autoSave()                // Auto-save after enabling
+	// Don't clear the queue when enabling - let LoadState handle it
+	q.autoSave() // Auto-save after enabling
 }
 
 // Disable stops the queue system and clears the queue

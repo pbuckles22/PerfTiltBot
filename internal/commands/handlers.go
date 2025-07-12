@@ -22,8 +22,8 @@ func GetCommandManager() *CommandManager {
 	return commandManager
 }
 
-// handleHelp shows the list of available commands
-func handleHelp(message twitch.PrivateMessage, args []string) string {
+// HandleHelp shows the list of available commands
+func HandleHelp(message twitch.PrivateMessage, args []string) string {
 	commands := commandManager.GetCommandList()
 	var commandList []string
 
@@ -98,13 +98,13 @@ func handleHelp(message twitch.PrivateMessage, args []string) string {
 	return response.String()
 }
 
-// handlePing checks if the bot is alive
-func handlePing(message twitch.PrivateMessage, args []string) string {
+// HandlePing checks if the bot is alive
+func HandlePing(message twitch.PrivateMessage, args []string) string {
 	return "Pong! 🏓"
 }
 
-// handleStartQueue starts the queue system
-func handleStartQueue(message twitch.PrivateMessage, args []string) string {
+// HandleStartQueue starts the queue system
+func HandleStartQueue(message twitch.PrivateMessage, args []string) string {
 	queue := commandManager.GetQueue()
 	if queue.IsEnabled() {
 		return "Queue system is already running!"
@@ -113,8 +113,8 @@ func handleStartQueue(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("@%s has started the queue system!", message.User.Name)
 }
 
-// handleEndQueue ends the queue system
-func handleEndQueue(message twitch.PrivateMessage, args []string) string {
+// HandleEndQueue ends the queue system
+func HandleEndQueue(message twitch.PrivateMessage, args []string) string {
 	queue := commandManager.GetQueue()
 	if !queue.IsEnabled() {
 		return "Queue system is already disabled!"
@@ -123,8 +123,8 @@ func handleEndQueue(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("@%s has ended the queue system!", message.User.Name)
 }
 
-// handleClearQueue clears all users from the queue
-func handleClearQueue(message twitch.PrivateMessage, args []string) string {
+// HandleClearQueue clears all users from the queue
+func HandleClearQueue(message twitch.PrivateMessage, args []string) string {
 	queue := commandManager.GetQueue()
 	if !queue.IsEnabled() {
 		return "Queue system is currently disabled."
@@ -133,8 +133,8 @@ func handleClearQueue(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("Queue cleared (%d users removed)", count)
 }
 
-// handleJoin handles the !join command
-func handleJoin(message twitch.PrivateMessage, args []string) string {
+// HandleJoin handles the !join command
+func HandleJoin(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
@@ -178,8 +178,8 @@ func handleJoin(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("%s joined queue at position %d (%d total)", args[0], pos, total)
 }
 
-// handleLeave handles the !leave command
-func handleLeave(message twitch.PrivateMessage, args []string) string {
+// HandleLeave handles the !leave command
+func HandleLeave(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
@@ -210,8 +210,8 @@ func handleLeave(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("%s is not in the queue!", username)
 }
 
-// handleQueue shows the current queue
-func handleQueue(message twitch.PrivateMessage, args []string) string {
+// HandleQueue shows the current queue
+func HandleQueue(message twitch.PrivateMessage, args []string) string {
 	queue := commandManager.GetQueue()
 	if !queue.IsEnabled() {
 		return "Queue system is currently disabled."
@@ -231,8 +231,8 @@ func handleQueue(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("Queue: %s (%d total)", strings.Join(users, ", "), len(users))
 }
 
-// handlePosition shows a user's position in the queue
-func handlePosition(message twitch.PrivateMessage, args []string) string {
+// HandlePosition shows a user's position in the queue
+func HandlePosition(message twitch.PrivateMessage, args []string) string {
 	queue := commandManager.GetQueue()
 	if !queue.IsEnabled() {
 		return "Queue system is currently disabled."
@@ -268,8 +268,8 @@ func handlePosition(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("%s is at position %d", username, position)
 }
 
-// handlePop handles the !pop command
-func handlePop(message twitch.PrivateMessage, args []string) string {
+// HandlePop handles the !pop command
+func HandlePop(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
@@ -306,8 +306,8 @@ func handlePop(message twitch.PrivateMessage, args []string) string {
 	return response.String()
 }
 
-// handleRemove handles the !remove command
-func handleRemove(message twitch.PrivateMessage, args []string) string {
+// HandleRemove handles the !remove command
+func HandleRemove(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
@@ -354,8 +354,8 @@ func handleRemove(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("Error removing %s from the queue.", username)
 }
 
-// handleMove handles the !move command
-func handleMove(message twitch.PrivateMessage, args []string) string {
+// HandleMove handles the !move command
+func HandleMove(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
@@ -407,8 +407,8 @@ func handleMove(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("%s moved to position %d", exactUsername, toPosition)
 }
 
-// handlePause pauses the queue system
-func handlePause(message twitch.PrivateMessage, args []string) string {
+// HandlePause pauses the queue system
+func HandlePause(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is not enabled"
@@ -420,8 +420,8 @@ func handlePause(message twitch.PrivateMessage, args []string) string {
 	return "Queue is now paused. No new entries can be added until the queue is unpaused."
 }
 
-// handleUnpause handles the !unpause command
-func handleUnpause(message twitch.PrivateMessage, args []string) string {
+// HandleUnpause handles the !unpause command
+func HandleUnpause(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is not enabled"
@@ -433,8 +433,8 @@ func handleUnpause(message twitch.PrivateMessage, args []string) string {
 	return "Queue is now open again."
 }
 
-// handleSaveState handles the !save command
-func handleSaveState(message twitch.PrivateMessage, args []string) string {
+// HandleSaveState handles the !save command
+func HandleSaveState(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	queue := cm.GetQueue()
 
@@ -452,8 +452,8 @@ func handleSaveState(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("Queue state has been saved with %d user(s)", len(users))
 }
 
-// handleLoadState handles the !load command
-func handleLoadState(message twitch.PrivateMessage, args []string) string {
+// HandleLoadState handles the !load command
+func HandleLoadState(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	queue := cm.GetQueue()
 
@@ -482,8 +482,8 @@ func handleLoadState(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("Queue state has been restored with %d user(s)!", len(users))
 }
 
-// handleRestoreAuto handles the !restoreauto command (for testing crash recovery)
-func handleRestoreAuto(message twitch.PrivateMessage, args []string) string {
+// HandleRestoreAuto handles the !restoreauto command (for testing crash recovery)
+func HandleRestoreAuto(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	queue := cm.GetQueue()
 
@@ -508,36 +508,36 @@ func handleRestoreAuto(message twitch.PrivateMessage, args []string) string {
 	return fmt.Sprintf("Auto-save state has been restored with %d user(s)!", len(users))
 }
 
-// handleKill handles the !kill command
-func handleKill(message twitch.PrivateMessage, args []string) string {
+// HandleKill handles the !kill command
+func HandleKill(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	cm.RequestShutdown()
 	return "Bot shutdown initiated. Goodbye! 👋"
 }
 
-// handleRestart handles the !restart command
-func handleRestart(message twitch.PrivateMessage, args []string) string {
+// HandleRestart handles the !restart command
+func HandleRestart(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	cm.RequestShutdown()
 	return "Bot restart initiated. See you soon! 🔄"
 }
 
-// handleEnable handles the !enable command
-func handleEnable(message twitch.PrivateMessage, args []string) string {
+// HandleEnable handles the !enable command
+func HandleEnable(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	cm.GetQueue().Enable()
 	return "Queue system has been enabled!"
 }
 
-// handleDisable handles the !disable command
-func handleDisable(message twitch.PrivateMessage, args []string) string {
+// HandleDisable handles the !disable command
+func HandleDisable(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	cm.GetQueue().Disable()
 	return "Queue system has been disabled!"
 }
 
-// handleClear handles the !clear command
-func handleClear(message twitch.PrivateMessage, args []string) string {
+// HandleClear handles the !clear command
+func HandleClear(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
 	if !cm.GetQueue().IsEnabled() {
 		return "Queue system is currently disabled."
