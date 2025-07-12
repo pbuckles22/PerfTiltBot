@@ -5,7 +5,6 @@ import (
 	"time"
 
 	twitchirc "github.com/gempir/go-twitch-irc/v4"
-	twitchauth "github.com/pbuckles22/PBChatBot/internal/twitch"
 	"github.com/pbuckles22/PBChatBot/internal/utils"
 )
 
@@ -15,7 +14,7 @@ func formatTimeET(t time.Time, timezone string) string {
 }
 
 // RegisterAuthCommand registers the auth command
-func RegisterAuthCommand(cm *CommandManager, authManager *twitchauth.AuthManager) {
+func RegisterAuthCommand(cm *CommandManager, authManager AuthManagerInterface) {
 	cm.RegisterCommand(&Command{
 		Name:        "auth",
 		Description: "Refreshes the bot's authentication token",

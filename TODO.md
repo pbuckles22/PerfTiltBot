@@ -56,12 +56,12 @@
 
 ## Multi-Channel Bot (One Container, Multiple Channels)
 
-- [ ] Design configuration format for multiple channels (YAML/JSON)
-- [ ] Refactor bot startup to load multiple channel configs
-- [ ] Refactor bot struct to support multiple IRC connections
-- [ ] Implement concurrent connection handling for each channel
+- [x] Design configuration format for multiple channels (YAML/JSON)
+- [x] Refactor bot startup to load multiple channel configs
+- [x] Refactor bot struct to support multiple IRC connections
+- [x] Implement concurrent connection handling for each channel
 - [ ] Refactor command/queue management to be channel-specific
-- [ ] Implement per-channel logging and error handling
+- [x] Implement per-channel logging and error handling
 - [ ] Update Docker entrypoint to accept multiple channels
 - [ ] Update documentation and examples for multi-channel usage
 - [ ] Add tests for multi-channel operation
