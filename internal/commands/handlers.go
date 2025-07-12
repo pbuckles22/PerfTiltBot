@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -23,12 +24,19 @@ func GetCommandManager() *CommandManager {
 
 // handleHelp shows the list of available commands
 func handleHelp(message twitch.PrivateMessage, args []string) string {
-	queue := commandManager.GetQueue()
 	commands := commandManager.GetCommandList()
 	var commandList []string
 
-	// Build the list of commands to display
+	// Build the list of commands to display based on user permissions
 	for _, cmd := range commands {
+		// Check if user has permission to use this command
+		if cmd.ModOnly && !isPrivileged(message) {
+			continue // Skip mod-only commands for non-privileged users
+		}
+		if cmd.IsPrivileged && !isPrivileged(message) {
+			continue // Skip privileged commands for regular users
+		}
+
 		// Build command info with name and aliases
 		cmdInfo := fmt.Sprintf("!%s", cmd.Name)
 		if len(cmd.Aliases) > 0 {
@@ -62,7 +70,7 @@ func handleHelp(message twitch.PrivateMessage, args []string) string {
 
 	for _, cmd := range commandList {
 		// Base commands that are always available
-		if strings.Contains(cmd, "help") || strings.Contains(cmd, "ping") || strings.Contains(cmd, "startqueue") {
+		if strings.Contains(cmd, "help") || strings.Contains(cmd, "ping") || strings.Contains(cmd, "uptime") {
 			baseCommands = append(baseCommands, cmd)
 		} else {
 			queueCommands = append(queueCommands, cmd)
@@ -80,7 +88,7 @@ func handleHelp(message twitch.PrivateMessage, args []string) string {
 		}
 	}
 
-	if queue.IsEnabled() && len(queueCommands) > 0 {
+	if len(queueCommands) > 0 {
 		response.WriteString("\nQueue Commands:\n")
 		for _, cmd := range queueCommands {
 			response.WriteString(fmt.Sprintf("• %s\n", cmd))
@@ -428,10 +436,20 @@ func handleUnpause(message twitch.PrivateMessage, args []string) string {
 // handleSaveState handles the !save command
 func handleSaveState(message twitch.PrivateMessage, args []string) string {
 	cm := GetCommandManager()
-	if err := cm.GetQueue().SaveState(); err != nil {
+	queue := cm.GetQueue()
+
+	// Get current queue state before saving
+	users := queue.List()
+
+	if err := queue.SaveBackup(); err != nil {
 		return fmt.Sprintf("Error saving queue state: %v", err)
 	}
-	return "Queue state has been saved!"
+
+	// Provide more detailed feedback
+	if len(users) == 0 {
+		return "Queue state has been saved (empty queue)"
+	}
+	return fmt.Sprintf("Queue state has been saved with %d user(s)", len(users))
 }
 
 // handleLoadState handles the !load command
@@ -445,10 +463,14 @@ func handleLoadState(message twitch.PrivateMessage, args []string) string {
 		queue.Enable()
 	}
 
-	// Try to restore the saved queue state
-	if err := queue.LoadState(); err != nil {
+	// Try to restore the saved queue state from backup
+	if err := queue.LoadBackup(); err != nil {
 		if wasDisabled {
 			return "Queue system has been started!"
+		}
+		// Provide more specific error message
+		if os.IsNotExist(err) {
+			return "No backup file found. Use !savequeue to create a backup first."
 		}
 		return fmt.Sprintf("Error loading queue state: %v", err)
 	}
@@ -458,6 +480,32 @@ func handleLoadState(message twitch.PrivateMessage, args []string) string {
 		return fmt.Sprintf("Queue system has been started and restored with %d user(s)!", len(users))
 	}
 	return fmt.Sprintf("Queue state has been restored with %d user(s)!", len(users))
+}
+
+// handleRestoreAuto handles the !restoreauto command (for testing crash recovery)
+func handleRestoreAuto(message twitch.PrivateMessage, args []string) string {
+	cm := GetCommandManager()
+	queue := cm.GetQueue()
+
+	// If queue is disabled, enable it first
+	wasDisabled := !queue.IsEnabled()
+	if wasDisabled {
+		queue.Enable()
+	}
+
+	// Try to restore from the auto-save file (simulating crash recovery)
+	if err := queue.LoadState(); err != nil {
+		if wasDisabled {
+			return "Queue system has been started!"
+		}
+		return fmt.Sprintf("Error loading auto-save state: %v", err)
+	}
+
+	users := queue.List()
+	if wasDisabled {
+		return fmt.Sprintf("Queue system has been started and auto-restored with %d user(s)!", len(users))
+	}
+	return fmt.Sprintf("Auto-save state has been restored with %d user(s)!", len(users))
 }
 
 // handleKill handles the !kill command

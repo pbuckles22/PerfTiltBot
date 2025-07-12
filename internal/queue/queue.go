@@ -64,7 +64,7 @@ func (q *Queue) Disable() {
 	q.enabled = false
 	q.paused = false
 	q.users = make([]string, 0)
-	q.autoSave() // Auto-save after disabling
+	q.autoSave() // Auto-save after disabling (saves empty queue)
 }
 
 // Pause pauses the queue system (no new additions allowed)
@@ -423,6 +423,24 @@ func (q *Queue) autoSave() {
 
 // SaveState saves the current queue state to a file
 func (q *Queue) SaveState() error {
+	return q.saveStateToFile("queue_state")
+}
+
+// SaveBackup saves the current queue state to a backup file
+func (q *Queue) SaveBackup() error {
+	// Add debug logging
+	fmt.Printf("[DEBUG] Saving backup for channel: %s with %d users\n", q.channel, len(q.users))
+	err := q.saveStateToFile("queue_backup")
+	if err != nil {
+		fmt.Printf("[DEBUG] SaveBackup error: %v\n", err)
+	} else {
+		fmt.Printf("[DEBUG] SaveBackup successful\n")
+	}
+	return err
+}
+
+// saveStateToFile saves the current queue state to a specific file
+func (q *Queue) saveStateToFile(filePrefix string) error {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
@@ -442,8 +460,8 @@ func (q *Queue) SaveState() error {
 		return fmt.Errorf("failed to marshal queue state: %w", err)
 	}
 
-	// Use channel-specific filename
-	filename := filepath.Join(q.dataPath, fmt.Sprintf("queue_state_%s.json", q.channel))
+	// Use channel-specific filename with prefix
+	filename := filepath.Join(q.dataPath, fmt.Sprintf("%s_%s.json", filePrefix, q.channel))
 	if err := os.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to write queue state: %w", err)
 	}
@@ -453,11 +471,27 @@ func (q *Queue) SaveState() error {
 
 // LoadState loads the queue state from a file
 func (q *Queue) LoadState() error {
+	return q.loadStateFromFile("queue_state")
+}
+
+// LoadBackup loads the queue state from the backup file
+func (q *Queue) LoadBackup() error {
+	// Add debug logging
+	fmt.Printf("[DEBUG] Loading backup for channel: %s\n", q.channel)
+	err := q.loadStateFromFile("queue_backup")
+	if err != nil {
+		fmt.Printf("[DEBUG] LoadBackup error: %v\n", err)
+	}
+	return err
+}
+
+// loadStateFromFile loads the queue state from a specific file
+func (q *Queue) loadStateFromFile(filePrefix string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	// Use channel-specific filename
-	filename := filepath.Join(q.dataPath, fmt.Sprintf("queue_state_%s.json", q.channel))
+	// Use channel-specific filename with prefix
+	filename := filepath.Join(q.dataPath, fmt.Sprintf("%s_%s.json", filePrefix, q.channel))
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {

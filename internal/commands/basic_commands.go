@@ -126,6 +126,13 @@ func RegisterBasicCommands(cm *CommandManager) {
 	})
 
 	cm.RegisterCommand(&Command{
+		Name:        "restoreauto",
+		Aliases:     []string{"ra"},
+		Description: "Restore from auto-save (for testing crash recovery)",
+		Handler:     handleRestoreAuto,
+	})
+
+	cm.RegisterCommand(&Command{
 		Name:        "kill",
 		Aliases:     []string{"k"},
 		Description: "Shutdown the bot",

@@ -21,4 +21,7 @@
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Test files
+test_harness 
