@@ -130,7 +130,7 @@ func handleClearQueue(message twitch.PrivateMessage, args []string) string {
 		return "Queue system is currently disabled."
 	}
 	count := queue.Clear()
-	return fmt.Sprintf("@%s cleared the queue! Removed %d user(s).", message.User.Name, count)
+	return fmt.Sprintf("Queue cleared (%d users removed)", count)
 }
 
 // handleJoin handles the !join command
@@ -148,7 +148,7 @@ func handleJoin(message twitch.PrivateMessage, args []string) string {
 		}
 		pos := cm.GetQueue().Position(message.User.Name)
 		total := cm.GetQueue().Size()
-		return fmt.Sprintf("%s has joined the queue at position %d! (Total in queue: %d)", message.User.Name, pos, total)
+		return fmt.Sprintf("%s joined queue at position %d (%d total)", message.User.Name, pos, total)
 	}
 
 	// If arguments provided and user is privileged, add all specified users
@@ -162,7 +162,7 @@ func handleJoin(message twitch.PrivateMessage, args []string) string {
 			} else {
 				pos := cm.GetQueue().Position(username)
 				total := cm.GetQueue().Size()
-				responses = append(responses, fmt.Sprintf("%s has joined the queue at position %d! (Total in queue: %d)", username, pos, total))
+				responses = append(responses, fmt.Sprintf("%s joined queue at position %d (%d total)", username, pos, total))
 			}
 		}
 		return strings.Join(responses, " ")
@@ -175,7 +175,7 @@ func handleJoin(message twitch.PrivateMessage, args []string) string {
 	}
 	pos := cm.GetQueue().Position(args[0])
 	total := cm.GetQueue().Size()
-	return fmt.Sprintf("%s has joined the queue at position %d! (Total in queue: %d)", args[0], pos, total)
+	return fmt.Sprintf("%s joined queue at position %d (%d total)", args[0], pos, total)
 }
 
 // handleLeave handles the !leave command
@@ -205,7 +205,7 @@ func handleLeave(message twitch.PrivateMessage, args []string) string {
 	}
 
 	if cm.GetQueue().Remove(exactUsername) {
-		return fmt.Sprintf("%s has left the queue!", exactUsername)
+		return fmt.Sprintf("%s left queue", exactUsername)
 	}
 	return fmt.Sprintf("%s is not in the queue!", username)
 }
@@ -228,7 +228,7 @@ func handleQueue(message twitch.PrivateMessage, args []string) string {
 		userList = append(userList, fmt.Sprintf("%d) %s", i+1, user))
 	}
 
-	return fmt.Sprintf("Current Queue (%d): %s", len(users), strings.Join(userList, ", "))
+	return fmt.Sprintf("Queue: %s (%d total)", strings.Join(users, ", "), len(users))
 }
 
 // handlePosition shows a user's position in the queue
@@ -244,7 +244,7 @@ func handlePosition(message twitch.PrivateMessage, args []string) string {
 		if position == -1 {
 			return fmt.Sprintf("@%s, you are not in the queue!", message.User.Name)
 		}
-		return fmt.Sprintf("@%s, you are at position %d in the queue!", message.User.Name, position)
+		return fmt.Sprintf("%s is at position %d", message.User.Name, position)
 	}
 
 	// Try to parse argument as a position number
@@ -265,7 +265,7 @@ func handlePosition(message twitch.PrivateMessage, args []string) string {
 	if position == -1 {
 		return fmt.Sprintf("%s is not in the queue!", username)
 	}
-	return fmt.Sprintf("%s is at position %d in the queue!", username, position)
+	return fmt.Sprintf("%s is at position %d", username, position)
 }
 
 // handlePop handles the !pop command
@@ -295,7 +295,7 @@ func handlePop(message twitch.PrivateMessage, args []string) string {
 
 	// Format the response
 	var response strings.Builder
-	response.WriteString("Popped from queue: ")
+	response.WriteString("Popped: ")
 	for i, user := range users {
 		if i > 0 {
 			response.WriteString(", ")
@@ -327,7 +327,7 @@ func handleRemove(message twitch.PrivateMessage, args []string) string {
 		}
 		username := users[position-1]
 		if cm.GetQueue().Remove(username) {
-			return fmt.Sprintf("%s (position %d) has been removed from the queue!", username, position)
+			return fmt.Sprintf("%s (position %d) removed from queue", username, position)
 		}
 		return fmt.Sprintf("Error removing user at position %d", position)
 	}
@@ -349,7 +349,7 @@ func handleRemove(message twitch.PrivateMessage, args []string) string {
 	}
 
 	if cm.GetQueue().Remove(exactUsername) {
-		return fmt.Sprintf("%s has been removed from the queue!", exactUsername)
+		return fmt.Sprintf("%s removed from queue", exactUsername)
 	}
 	return fmt.Sprintf("Error removing %s from the queue.", username)
 }
@@ -404,7 +404,7 @@ func handleMove(message twitch.PrivateMessage, args []string) string {
 		return fmt.Sprintf("Error moving user: %v", err)
 	}
 
-	return fmt.Sprintf("%s has been moved to position %d!", exactUsername, toPosition)
+	return fmt.Sprintf("%s moved to position %d", exactUsername, toPosition)
 }
 
 // handlePause pauses the queue system

@@ -384,7 +384,7 @@ func main() {
 		description string
 	}{
 		{"!queue", "currently empty", "Empty queue verification"},
-		{"!join", "joined the queue", "Self-join"},
+		{"!join", "joined queue", "Self-join"},
 		{"!queue", "pbtestbot", "Queue state after join"},
 		{"!position", "position 1", "Self position check"},
 	}
@@ -410,8 +410,8 @@ func main() {
 		expect      string
 		description string
 	}{
-		{"!join testuser1", "joined the queue", "Add single user"},
-		{"!join testuser2", "joined the queue", "Add second user"},
+		{"!join testuser1", "joined queue", "Add single user"},
+		{"!join testuser2", "joined queue", "Add second user"},
 		{"!queue", "testuser1", "Queue state with multiple users"},
 		{"!move testuser1 5", "moved to position", "Move user by name"},
 		{"!queue", "testuser1", "Queue state after move"},
@@ -438,11 +438,11 @@ func main() {
 		expect      string
 		description string
 	}{
-		{"!join multi1 multi2 multi3", "joined the queue", "Multi-user join"},
+		{"!join multi1 multi2 multi3", "joined queue", "Multi-user join"},
 		{"!queue", "multi1", "Queue state after multi-join"},
-		{"!pop 1", "Popped from queue", "Pop single user"},
+		{"!pop 1", "Popped:", "Pop single user"},
 		{"!queue", "testuser2", "Queue state after pop"},
-		{"!pop 2", "Popped from queue", "Pop multiple users"},
+		{"!pop 2", "Popped:", "Pop multiple users"},
 		{"!queue", "testuser1", "Queue state after multi-pop"},
 	}
 
@@ -467,11 +467,11 @@ func main() {
 		expect      string
 		description string
 	}{
-		{"!remove testuser1", "removed from the queue", "Remove user by name"},
+		{"!remove testuser1", "removed from queue", "Remove user by name"},
 		{"!queue", "multi3", "Queue state after remove"},
-		{"!remove 1", "removed from the queue", "Remove user by position"},
+		{"!remove 1", "removed from queue", "Remove user by position"},
 		{"!queue", "pbtestbot", "Queue state after position remove"},
-		{"!leave pbtestbot", "left the queue", "Leave self"},
+		{"!leave pbtestbot", "left queue", "Leave self"},
 		{"!queue", "currently empty", "Queue state after leave"},
 	}
 
