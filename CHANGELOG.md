@@ -2,6 +2,23 @@
 
 All notable changes to PerfTiltBot will be documented in this file.
 
+## [Unreleased] - 2025-01-13
+
+### Work in Progress
+- **Multi-Channel Bot Enhancement**: Ongoing improvements to the multi-channel bot implementation
+  - Added `internal/twitch/token_utils.go` for centralized token refresh logic
+  - Enhanced token refresh safety checks to prevent ticker panic issues
+  - Improved multi-channel bot connection handling and error recovery
+  - Updated test harness for multi-channel testing scenarios
+  - Enhanced command handlers for better channel isolation
+
+### Current Status
+- Feature branch `feature/multi-channel-bot` contains active development
+- Core multi-channel functionality is implemented and working
+- Token refresh improvements have been added and tested
+- Integration testing and documentation updates are pending
+- Ready for final testing and merge preparation
+
 ## [2.0.0] - 2025-01-10
 
 ### Added

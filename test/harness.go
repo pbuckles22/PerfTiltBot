@@ -348,3 +348,7 @@ func containsIgnoreCaseAndTrim(s, substr string) bool {
 	substr = strings.ToLower(strings.TrimSpace(substr))
 	return strings.Contains(s, substr)
 }
+
+func main() {
+	mainIRC()
+}

@@ -11,7 +11,6 @@ import (
 	channelstats "github.com/pbuckles22/PBChatBot/internal/channel"
 	"github.com/pbuckles22/PBChatBot/internal/commands"
 	"github.com/pbuckles22/PBChatBot/internal/config"
-	"github.com/pbuckles22/PBChatBot/internal/utils"
 )
 
 // ChannelBot represents a single channel's bot instance
@@ -346,8 +345,7 @@ func (mcb *MultiChannelBot) refreshTokenLoop() {
 				// Store the old expiry time for comparison
 				oldExpiry := mcb.authManager.ExpiresAt
 
-				newToken, err := mcb.authManager.GetAccessToken()
-				if err != nil {
+				if err := mcb.authManager.RefreshToken(); err != nil {
 					log.Printf("Error refreshing token: %v", err)
 					continue
 				}
@@ -357,7 +355,7 @@ func (mcb *MultiChannelBot) refreshTokenLoop() {
 				for channelName, channelBot := range mcb.channels {
 					channelBot.mu.RLock()
 					if channelBot.connected && channelBot.client != nil {
-						channelBot.client.SetIRCToken("oauth:" + newToken)
+						channelBot.client.SetIRCToken("oauth:" + mcb.authManager.AccessToken)
 						log.Printf("[%s] Token updated", channelName)
 					}
 					channelBot.mu.RUnlock()
@@ -397,9 +395,4 @@ func (mcb *MultiChannelBot) refreshTokenLoop() {
 			}
 		}
 	}
-}
-
-// formatTimeForLogs formats time for debug logs in PST
-func formatTimeForLogs(t time.Time) string {
-	return utils.FormatTimeForLogs(t)
 }

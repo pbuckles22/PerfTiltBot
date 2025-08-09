@@ -1,235 +1,219 @@
-# PerfTiltBot Test Plans
+# PerfTiltBot Queue System Test Plan
 
-## Bot Management Script Test Plan
+## Overview
+This test plan covers the queue management system for the PerfTiltBot, including all commands, edge cases, and recent improvements.
 
-### Prerequisites
-- Docker Desktop running
-- PowerShell 7.0 or higher
-- At least two channel-specific secrets files (e.g., `pbuckles_secrets.yaml` and `test_channel_secrets.yaml`)
+## Current Status (2025-01-13)
+**Multi-Channel Bot Development**: The bot has been enhanced with multi-channel support and improved token management. Recent changes include:
+- Enhanced token refresh logic with safety checks
+- Improved multi-channel connection handling
+- Better error recovery and logging
+- Channel-specific command and queue management
+- Test harness updates for multi-channel scenarios
 
-### Test Cases
-
-#### 1. Basic Command Validation
-- [ ] Run script without arguments
-  - Expected: Display usage instructions
-- [ ] Run with invalid command
-  - Expected: Display error message and usage instructions
-- [ ] Run with missing channel name for start command
-  - Expected: Display error message about missing channel name
-- [ ] Run with missing channel name for stop-channel command
-  - Expected: Display error message about missing channel name
-
-#### 2. Build Command
-- [ ] Run `.\run_bot.ps1 build`
-  - Expected: Successfully build Docker image
-  - Verify: `docker images` shows perftiltbot image
-  - Verify: Image is tagged with correct version
-- [ ] Run build with existing image
-  - Expected: Rebuild image without errors
-  - Verify: Version tag is updated
-- [ ] Run build with specific version
-  - Expected: Image is built with specified version
-  - Verify: Version is correctly set in image labels
-  - Verify: Version is available in container environment
-
-#### 3. Start Command
-- [ ] Start bot for channel with existing secrets file
-  - Expected: Successfully start container
-  - Verify: Container running with correct name
-  - Verify: Correct secrets file mounted
-  - Verify: Data volume created
-  - Verify: Version information is accessible
-- [ ] Start bot for channel without secrets file
-  - Expected: Display error about missing secrets file
-- [ ] Start bot for channel with existing running container
-  - Expected: Stop and remove existing container
-  - Expected: Start new container
-- [ ] Start multiple bots for different channels
-  - Expected: Each bot runs in separate container
-  - Verify: Each has correct secrets file
-  - Verify: Each has separate data volume
-  - Verify: Each has correct version information
-
-#### 4. Stop Channel Command
-- [ ] Stop running bot for specific channel
-  - Expected: Container stopped and removed
-  - Verify: Container no longer in `docker ps`
-- [ ] Stop non-existent channel
-  - Expected: Display message about no running instance
-- [ ] Stop channel that was already stopped
-  - Expected: Display message about no running instance
-
-#### 5. List Command
-- [ ] List with no running bots
-  - Expected: Display "No running bot instances found"
-- [ ] List with one running bot
-  - Expected: Display channel name and container name
-- [ ] List with multiple running bots
-  - Expected: Display all channels and containers
-  - Verify: Correct channel names extracted from container names
-
-#### 6. Stop All Command
-- [ ] Stop all with no running bots
-  - Expected: Display "No running bot instances found"
-- [ ] Stop all with one running bot
-  - Expected: Stop and remove container
-- [ ] Stop all with multiple running bots
-  - Expected: Stop and remove all containers
-  - Verify: No perftiltbot containers running
-
-#### 7. Error Handling
-- [ ] Test with invalid Docker commands
-  - Expected: Appropriate error messages
-- [ ] Test with Docker not running
-  - Expected: Clear error message about Docker not running
-- [ ] Test with insufficient permissions
-  - Expected: Appropriate permission error messages
-
-#### 8. Integration Tests
-- [ ] Full lifecycle test
-  1. Build image
-  2. Start bot for channel A
-  3. Start bot for channel B
-  4. List running bots
-  5. Stop channel A
-  6. List running bots
-  7. Stop all bots
-  8. List running bots
-  - Expected: All steps complete successfully
-  - Verify: Correct state at each step
-
-## Docker Improvements Test Plan
-
-### Prerequisites
-- Docker Desktop running
-- Go 1.21 or higher installed
-- Git installed
-
-### Test Cases
-
-#### 1. Multi-stage Build
-- [ ] Build image from scratch
-  - Expected: Successfully build both stages
-  - Verify: Final image size is smaller than single-stage build
-  - Verify: No build tools in final image
-  - Verify: Version label is set correctly
-- [ ] Build with cached layers
-  - Expected: Faster build time
-  - Verify: Correct use of layer caching
-- [ ] Build with version argument
-  - Expected: Image is built with specified version
-  - Verify: Version is set in both label and environment
-  - Verify: Version persists in running container
-
-#### 2. Image Size and Layers
-- [ ] Check final image size
-  - Expected: Significantly smaller than previous version
-  - Verify: No unnecessary files or tools included
-- [ ] Inspect image layers
-  - Expected: Minimal number of layers
-  - Verify: Layers are properly ordered for caching
-- [ ] Verify version metadata
-  - Expected: Version label is present
-  - Expected: Maintainer label is present
-  - Verify: Labels are correctly formatted
-
-#### 3. Timezone Configuration
-- [ ] Verify timezone setting
-  - Expected: Container uses UTC timezone
-  - Verify: Log timestamps are in UTC
-- [ ] Test timezone persistence
-  - Expected: Timezone setting survives container restart
-  - Verify: No timezone-related errors in logs
-
-#### 4. Directory Structure
-- [ ] Verify directory creation
-  - Expected: /app/configs and /app/data directories exist
-  - Verify: Correct permissions on directories
-- [ ] Test volume mounting
-  - Expected: Secrets file mounts correctly
-  - Expected: Data volume mounts correctly
-  - Verify: No permission issues
-
-#### 5. Application Behavior
-- [ ] Test application startup
-  - Expected: Application starts successfully
-  - Verify: No missing dependency errors
-- [ ] Test logging
-  - Expected: Logs are properly formatted
-  - Verify: Pacific Time timestamps in logs
-- [ ] Test graceful shutdown
-  - Expected: Application shuts down cleanly
-  - Verify: No error messages during shutdown
-
-#### 6. Security
-- [ ] Check for sensitive files
-  - Expected: No sensitive files in image
-  - Verify: No credentials or secrets in image layers
-- [ ] Verify file permissions
-  - Expected: Appropriate permissions on all files
-  - Verify: No world-writable files
-
-#### 7. Performance
-- [ ] Test container startup time
-  - Expected: Fast startup time
-  - Verify: No unnecessary delays
-- [ ] Monitor resource usage
-  - Expected: Low memory footprint
-  - Expected: Minimal CPU usage when idle
-  - Verify: No memory leaks
-
-#### 8. Integration Tests
-- [ ] Full deployment test
-  1. Build image
-  2. Run container with mounted volumes
-  3. Verify application functionality
-  4. Test logging and timezone
-  5. Stop and restart container
-  6. Verify data persistence
-  - Expected: All steps complete successfully
-  - Verify: Application works as expected
+This test plan covers both single-channel and multi-channel operation scenarios.
 
 ## Test Environment Setup
-1. Create test secrets files:
-   ```powershell
-   # Create test channel secrets
-   Copy-Item configs/pbuckles_secrets.yaml configs/test_channel_secrets.yaml
-   ```
+- **Bot**: PerfTiltBot running on Twitch
+- **Channel**: Test channel with moderator privileges
+- **Test Users**: Multiple test accounts with different privilege levels (regular, VIP, mod, broadcaster)
+- **Data Path**: `/app/data` (Docker container)
 
-2. Clean up before testing:
-   ```powershell
-   # Stop and remove all existing containers
-   .\run_bot.ps1 stop-all
-   
-   # Remove existing images
-   docker rmi perftiltbot
-   ```
+## Test Categories
+
+### 1. Basic Queue Management
+
+#### 1.1 Queue Lifecycle
+- [ ] **Start Queue**: `!startqueue` - Verify queue system starts and is enabled
+- [ ] **End Queue**: `!endqueue` - Verify queue system stops and clears all users
+- [ ] **Enable/Disable**: `!enable` / `!disable` - Test manual enable/disable
+- [ ] **Queue Status**: Verify queue state persists across bot restarts
+
+#### 1.2 User Management
+- [ ] **Join Queue**: `!join` - Regular user joins queue
+- [ ] **Join with Username**: `!join username` - Add specific user to queue
+- [ ] **Leave Queue**: `!leave` - User leaves queue
+- [ ] **Leave with Username**: `!leave username` - Remove specific user (mod only)
+- [ ] **Position Check**: `!position` - Show user's position in queue
+- [ ] **Position by Username**: `!position username` - Show specific user's position
+- [ ] **Position by Number**: `!position 3` - Show user at position 3
+
+### 2. Queue Display and Information
+
+#### 2.1 Queue Display (`!q` / `!queue`)
+- [ ] **Empty Queue**: Verify "The queue is currently empty" message
+- [ ] **Single User**: Verify "1) username" format
+- [ ] **Multiple Users**: Verify "1) user1 2) user2 3) user3" format
+- [ ] **Large Queue**: Test with 10+ users to verify display limits
+- [ ] **Username Case**: Verify exact username case is preserved
+- [ ] **Empty Username Bug**: Test defensive check for empty usernames
+- [ ] **Position 1 Bug**: Verify first user always shows correctly
+
+#### 2.2 Queue Statistics
+- [ ] **Queue Size**: Verify accurate count in queue display
+- [ ] **Position Accuracy**: Verify positions are 1-based and sequential
+- [ ] **Real-time Updates**: Verify queue updates immediately after changes
+
+### 3. Queue Control Commands
+
+#### 3.1 Pause/Unpause System
+- [ ] **Pause Queue**: `!pausequeue` - Verify queue pauses
+- [ ] **Pause Message**: Verify "Queue is now paused" message
+- [ ] **Join While Paused**: 
+  - [ ] Regular user: Should be blocked with "queue system is currently paused"
+  - [ ] Mod user: Should be allowed to join
+  - [ ] VIP user: Should be blocked (not privileged for pause bypass)
+- [ ] **Unpause Queue**: `!unpausequeue` - Verify queue resumes
+- [ ] **Unpause Message**: Verify "Queue is now open again" message
+- [ ] **Join After Unpause**: Verify regular users can join again
+
+#### 3.2 Queue Manipulation
+- [ ] **Pop Single**: `!pop` - Remove first user from queue
+- [ ] **Pop Multiple**: `!pop 3` - Remove first 3 users
+- [ ] **Pop More Than Available**: `!pop 10` with 5 users in queue
+- [ ] **Clear Queue**: `!clear` - Remove all users
+- [ ] **Clear Count**: Verify correct count of removed users
+
+### 4. Enhanced Remove Command
+
+#### 4.1 Single Removal
+- [ ] **Remove by Username**: `!remove username` - Remove specific user
+- [ ] **Remove by Position**: `!remove 3` - Remove user at position 3
+- [ ] **Remove Invalid Position**: `!remove 999` - Error handling
+- [ ] **Remove Non-existent User**: `!remove nonexistentuser` - Error handling
+
+#### 4.2 Multiple Removal (NEW FEATURE)
+- [ ] **Multiple Positions**: `!remove 4 5` - Remove users at positions 4 and 5
+- [ ] **Multiple Usernames**: `!remove user1 user2` - Remove multiple users by name
+- [ ] **Mixed Arguments**: `!remove 3 user1 7` - Mix positions and usernames
+- [ ] **Partial Success**: `!remove 1 nonexistentuser 3` - Some valid, some invalid
+- [ ] **All Invalid**: `!remove 999 nonexistentuser` - All arguments invalid
+- [ ] **Response Format**: Verify "Removed X user(s): user1 removed; user2 removed" format
+
+### 5. User Movement and Positioning
+
+#### 5.1 Move Command
+- [ ] **Move by Username**: `!move username 5` - Move user to position 5
+- [ ] **Move by Position**: `!move 3 1` - Move user at position 3 to position 1
+- [ ] **Move to Same Position**: `!move username 3` when user is at position 3
+- [ ] **Move Invalid Position**: `!move username 999` - Error handling
+- [ ] **Move Non-existent User**: `!move nonexistentuser 1` - Error handling
+
+### 6. Privilege and Permission Testing
+
+#### 6.1 User Privilege Levels
+- [ ] **Regular User**: Test all commands with regular user
+- [ ] **VIP User**: Test commands with VIP privileges
+- [ ] **Moderator**: Test commands with moderator privileges
+- [ ] **Broadcaster**: Test commands with broadcaster privileges
+
+#### 6.2 Privilege-Specific Commands
+- [ ] **Mod-Only Commands**: Verify only mods can use certain commands
+- [ ] **Privileged Commands**: Verify VIPs and mods can use privileged commands
+- [ ] **Pause Bypass**: Verify only mods can join when queue is paused
+
+### 7. Cooldown System
+
+#### 7.1 Cooldown Enforcement
+- [ ] **Regular User Cooldown**: Test 30-second cooldown on commands
+- [ ] **VIP User Cooldown**: Test 15-second cooldown on commands
+- [ ] **Moderator Cooldown**: Test 5-second cooldown on commands
+- [ ] **Broadcaster Cooldown**: Test no cooldown for broadcaster
+- [ ] **Cooldown Messages**: Verify appropriate cooldown messages
+- [ ] **Cooldown Persistence**: Verify cooldowns persist across commands
+
+### 8. State Persistence and Recovery
+
+#### 8.1 Save/Load System
+- [ ] **Save Queue**: `!savequeue` - Save current queue state
+- [ ] **Load Queue**: `!restorequeue` - Load saved queue state
+- [ ] **Auto-Save**: Verify queue auto-saves after modifications
+- [ ] **Crash Recovery**: `!restoreauto` - Test auto-recovery from crashes
+- [ ] **State Persistence**: Verify queue state survives bot restarts
+
+#### 8.2 Data Integrity
+- [ ] **File Corruption**: Test behavior with corrupted state files
+- [ ] **Missing Files**: Test behavior when state files are missing
+- [ ] **Channel Mismatch**: Test behavior with wrong channel data
+
+### 9. Error Handling and Edge Cases
+
+#### 9.1 Invalid Inputs
+- [ ] **Empty Commands**: `!join` with no arguments
+- [ ] **Invalid Numbers**: `!pop abc` - Non-numeric arguments
+- [ ] **Negative Numbers**: `!pop -1` - Negative values
+- [ ] **Zero Values**: `!pop 0` - Zero values
+- [ ] **Very Large Numbers**: `!pop 999999` - Extremely large values
+
+#### 9.2 Race Conditions
+- [ ] **Concurrent Joins**: Multiple users joining simultaneously
+- [ ] **Concurrent Removes**: Multiple mods removing users simultaneously
+- [ ] **Queue Modifications During Display**: Modify queue while displaying
+
+#### 9.3 Edge Cases
+- [ ] **Empty Queue Operations**: Try to pop/remove from empty queue
+- [ ] **Single User Queue**: Operations with only one user in queue
+- [ ] **Large Queue**: Operations with 100+ users in queue
+- [ ] **Special Characters**: Usernames with special characters
+- [ ] **Unicode Usernames**: Usernames with non-ASCII characters
+
+### 10. Performance Testing
+
+#### 10.1 Load Testing
+- [ ] **Rapid Commands**: Send commands rapidly to test response time
+- [ ] **Large Queue**: Test with maximum queue size (100 users)
+- [ ] **Memory Usage**: Monitor memory usage with large queues
+- [ ] **Response Time**: Measure response time for various commands
+
+### 11. Integration Testing
+
+#### 11.1 Bot Integration
+- [ ] **Command Registration**: Verify all commands are properly registered
+- [ ] **Help System**: `!help` - Verify all commands are listed
+- [ ] **Ping Command**: `!ping` - Verify bot responsiveness
+- [ ] **Uptime Command**: `!uptime` - Verify bot uptime tracking
+
+#### 11.2 Multi-Channel Support
+- [ ] **Channel Isolation**: Verify queues are separate per channel
+- [ ] **Channel-Specific Data**: Verify data files are channel-specific
+- [ ] **Cross-Channel Interference**: Ensure no cross-channel data leakage
 
 ## Test Execution
-1. Run through each test case in sequence
-2. Document any failures or unexpected behavior
-3. For each failure:
-   - Note the exact command used
-   - Note the expected vs actual behavior
-   - Note any error messages
-   - Take screenshots if relevant
+
+### Prerequisites
+1. Bot is running and connected to Twitch
+2. Test channel is configured
+3. Multiple test accounts are available
+4. Moderator privileges are granted to test accounts
+
+### Test Execution Order
+1. Basic functionality tests
+2. Edge case testing
+3. Performance testing
+4. Integration testing
+5. Regression testing
+
+### Test Data
+- **Test Users**: Create 10+ test accounts with various privilege levels
+- **Test Scenarios**: Document specific test scenarios and expected outcomes
+- **Test Results**: Record all test results, including failures and unexpected behavior
 
 ## Success Criteria
-- All test cases pass
-- No unexpected error messages
-- Containers start and stop correctly
-- Secrets files are mounted correctly
-- Data volumes are created and managed correctly
-- List command shows accurate information
-- Stop commands work as expected
-- Image size is optimized
-- Timezone handling works correctly
-- Security requirements are met
+- All commands function as expected
+- No data corruption or loss
+- Proper error handling for all edge cases
+- Performance remains acceptable under load
+- Queue state persists correctly across restarts
 
-## Notes
-- Keep Docker Desktop running during testing
-- Ensure sufficient disk space for multiple containers
-- Monitor system resources during multiple container tests
-- Document any performance issues or resource constraints
-- Test both PowerShell and shell scripts if applicable
-- Verify cross-platform compatibility 
+## Bug Reporting
+For any issues found during testing:
+1. Document the exact steps to reproduce
+2. Record the expected vs actual behavior
+3. Include relevant log information
+4. Note the test environment and conditions
+
+## Maintenance
+- Update test plan as new features are added
+- Review and update test cases based on bug reports
+- Maintain test data and scenarios
+- Regular regression testing after updates 

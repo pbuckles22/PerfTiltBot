@@ -13,20 +13,9 @@ import (
 	"github.com/pbuckles22/PBChatBot/internal/utils"
 )
 
-// Constants for token refresh
-const (
-	tokenRefreshPercentage = 25               // Check at 25% of remaining time
-	minRefreshTime         = 15 * time.Minute // Minimum time before expiry to refresh
-)
-
 // formatTime formats a time in the channel's configured timezone and prints the correct timezone abbreviation
 func (b *Bot) formatTime(t time.Time) string {
 	return utils.FormatTimeForDisplay(t, b.cfg.Timezone)
-}
-
-// formatTimeForLogs formats time for debug logs in PST
-func (b *Bot) formatTimeForLogs(t time.Time) string {
-	return utils.FormatTimeForLogs(t)
 }
 
 // Bot represents a Twitch chat bot
@@ -128,6 +117,9 @@ func (b *Bot) Connect(ctx context.Context) error {
 		}
 	})
 
+	// Start token refresh goroutine (only once, not on every connect)
+	go b.refreshTokenLoop(ctx)
+
 	// Start connection in a goroutine with reconnection logic
 	go func() {
 		for {
@@ -146,9 +138,6 @@ func (b *Bot) Connect(ctx context.Context) error {
 		}
 	}()
 
-	// Start token refresh goroutine
-	go b.refreshTokenLoop(ctx)
-
 	return nil
 }
 
@@ -160,7 +149,7 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 	nextCheckTime := time.Now().Add(checkInterval)
 
 	log.Printf("[Token Refresh Loop] Starting refresh loop. First check at: %s (in %s)",
-		b.formatTimeForLogs(nextCheckTime),
+		formatTimeForLogs(nextCheckTime),
 		checkInterval.Round(time.Second))
 
 	// Ensure positive interval for initial ticker
@@ -194,20 +183,19 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 				// Store the old expiry time for comparison
 				oldExpiry := b.authManager.ExpiresAt
 
-				newToken, err := b.authManager.GetAccessToken()
-				if err != nil {
+				if err := b.authManager.RefreshToken(); err != nil {
 					log.Printf("Error refreshing token: %v", err)
 					continue
 				}
-				b.client.SetIRCToken("oauth:" + newToken)
+				b.client.SetIRCToken("oauth:" + b.authManager.AccessToken)
 
 				// Calculate new check interval based on new token expiry
 				timeUntilExpiry = time.Until(b.authManager.ExpiresAt)
 				checkInterval = calculateCheckInterval(timeUntilExpiry)
 
 				log.Printf("[Token] Refreshed: %s -> %s (next check in %s)",
-					b.formatTimeForLogs(oldExpiry),
-					b.formatTimeForLogs(b.authManager.ExpiresAt),
+					formatTimeForLogs(oldExpiry),
+					formatTimeForLogs(b.authManager.ExpiresAt),
 					checkInterval.Round(time.Second))
 
 				// Reset ticker with new interval (ensure positive interval)
@@ -234,35 +222,6 @@ func (b *Bot) refreshTokenLoop(ctx context.Context) {
 			}
 		}
 	}
-}
-
-// calculateCheckInterval determines how often to check token validity
-// based on the remaining time until expiry
-func calculateCheckInterval(timeUntilExpiry time.Duration) time.Duration {
-	// If less than minimum time, refresh token immediately
-	if timeUntilExpiry <= minRefreshTime {
-		return 1 * time.Second // Return 1 second instead of 0 to avoid ticker panic
-	}
-
-	// Ensure we don't return negative or zero intervals
-	if timeUntilExpiry <= 0 {
-		return 1 * time.Second
-	}
-
-	// Calculate next check time as percentage of the current remaining time
-	// For example, with 4 hours and 25%:
-	// First check: 4h - (4h * 0.25) = 3h remaining
-	// Next check: 3h - (3h * 0.25) = 2h15m remaining
-	// Next check: 2h15m - (2h15m * 0.25) = 1h41m15s remaining
-	// And so on until we hit minimum time
-	interval := timeUntilExpiry * tokenRefreshPercentage / 100
-
-	// Ensure minimum interval of 1 second
-	if interval < 1*time.Second {
-		return 1 * time.Second
-	}
-
-	return interval
 }
 
 // RegisterCommandHandler adds a new command handler

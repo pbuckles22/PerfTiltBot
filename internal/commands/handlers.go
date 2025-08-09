@@ -142,6 +142,7 @@ func handleJoin(message twitch.PrivateMessage, args []string) string {
 
 	// If no arguments provided, add the command user
 	if len(args) == 0 {
+		// Only mods can join when paused (enforced in Add)
 		err := cm.GetQueue().Add(message.User.Name, isPrivileged(message))
 		if err != nil {
 			return fmt.Sprintf("Error joining queue: %v", err)
@@ -222,13 +223,20 @@ func handleQueue(message twitch.PrivateMessage, args []string) string {
 		return "The queue is currently empty."
 	}
 
+	// Defensive check: ensure no nil/empty usernames in queue
+	for i, user := range users {
+		if user == "" {
+			return fmt.Sprintf("[Warning] Queue data error: empty username at position %d. Please report this to the bot admin.", i+1)
+		}
+	}
+
 	// Build numbered list of users in queue
 	var userList []string
 	for i, user := range users {
 		userList = append(userList, fmt.Sprintf("%d) %s", i+1, user))
 	}
 
-	return fmt.Sprintf("Current Queue (%d): %s", len(users), strings.Join(userList, ", "))
+	return fmt.Sprintf("Current Queue (%d): %s", len(users), strings.Join(userList, " "))
 }
 
 // handlePosition shows a user's position in the queue
@@ -314,44 +322,55 @@ func handleRemove(message twitch.PrivateMessage, args []string) string {
 	}
 
 	if len(args) < 1 {
-		return "Usage: !remove <username> or !remove <position>"
+		return "Usage: !remove <username/position> [more ...]"
 	}
 
-	// Try to parse the argument as a position number
-	position, err := strconv.Atoi(args[0])
-	if err == nil {
-		// If it's a valid number, get the user at that position
-		users := cm.GetQueue().List()
-		if position < 1 || position > len(users) {
-			return fmt.Sprintf("Invalid position. Queue has %d users.", len(users))
-		}
-		username := users[position-1]
-		if cm.GetQueue().Remove(username) {
-			return fmt.Sprintf("%s (position %d) has been removed from the queue!", username, position)
-		}
-		return fmt.Sprintf("Error removing user at position %d", position)
-	}
-
-	// If not a number, treat as username
-	username := args[0]
-	// Get the current queue to find the exact case of the username
 	users := cm.GetQueue().List()
-	var exactUsername string
-	for _, user := range users {
-		if strings.EqualFold(user, username) {
-			exactUsername = user
-			break
+	var results []string
+	removed := 0
+
+	for _, arg := range args {
+		// Try to parse the argument as a position number
+		position, err := strconv.Atoi(arg)
+		if err == nil {
+			if position < 1 || position > len(users) {
+				results = append(results, fmt.Sprintf("Invalid position %d (queue has %d)", position, len(users)))
+				continue
+			}
+			username := users[position-1]
+			if cm.GetQueue().Remove(username) {
+				results = append(results, fmt.Sprintf("%s (position %d) removed", username, position))
+				removed++
+			} else {
+				results = append(results, fmt.Sprintf("Error removing user at position %d", position))
+			}
+			continue
+		}
+
+		// If not a number, treat as username
+		exactUsername := ""
+		for _, user := range users {
+			if strings.EqualFold(user, arg) {
+				exactUsername = user
+				break
+			}
+		}
+		if exactUsername == "" {
+			results = append(results, fmt.Sprintf("%s not in queue", arg))
+			continue
+		}
+		if cm.GetQueue().Remove(exactUsername) {
+			results = append(results, fmt.Sprintf("%s removed", exactUsername))
+			removed++
+		} else {
+			results = append(results, fmt.Sprintf("Error removing %s", arg))
 		}
 	}
 
-	if exactUsername == "" {
-		return fmt.Sprintf("%s is not in the queue!", username)
+	if removed == 0 {
+		return strings.Join(results, "; ")
 	}
-
-	if cm.GetQueue().Remove(exactUsername) {
-		return fmt.Sprintf("%s has been removed from the queue!", exactUsername)
-	}
-	return fmt.Sprintf("Error removing %s from the queue.", username)
+	return fmt.Sprintf("Removed %d user(s): %s", removed, strings.Join(results, "; "))
 }
 
 // handleMove handles the !move command
