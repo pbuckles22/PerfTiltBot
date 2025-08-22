@@ -185,11 +185,11 @@ HTML_TEMPLATE = """
                     <li>Go to <a href="https://dev.twitch.tv/console" target="_blank">https://dev.twitch.tv/console</a></li>
                     <li>Click "Register Your Application"</li>
                     <li>Fill in the form:
-                        <ul>
-                            <li><strong>Name:</strong> {{ bot_name }}</li>
-                            <li><strong>OAuth Redirect URLs:</strong> http://{{ request.host }}/oauth/callback</li>
-                            <li><strong>Category:</strong> Chat Bot</li>
-                        </ul>
+                                                 <ul>
+                             <li><strong>Name:</strong> {{ bot_name }}</li>
+                             <li><strong>OAuth Redirect URLs:</strong> https://{{ request.host }}/oauth/callback</li>
+                             <li><strong>Category:</strong> Chat Bot</li>
+                         </ul>
                     </li>
                     <li>Click "Create"</li>
                     <li>Copy the Client ID and Client Secret</li>
@@ -432,19 +432,47 @@ def process_callback():
 
 if __name__ == '__main__':
     import argparse
+    import ssl
     
     parser = argparse.ArgumentParser(description='Twitch OAuth Web Helper')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
     parser.add_argument('--port', type=int, default=3000, help='Port to bind to (default: 3000)')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('--https', action='store_true', help='Enable HTTPS with self-signed certificate')
     
     args = parser.parse_args()
     
     print(f"🤖 Starting Twitch OAuth Web Helper...")
-    print(f"🌐 Web interface will be available at: http://{args.host}:{args.port}")
+    
+    if args.https:
+        # Create self-signed certificate
+        import subprocess
+        import os
+        
+        cert_file = 'oauth_cert.pem'
+        key_file = 'oauth_key.pem'
+        
+        if not os.path.exists(cert_file) or not os.path.exists(key_file):
+            print("🔐 Creating self-signed certificate for HTTPS...")
+            subprocess.run([
+                'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-keyout', key_file,
+                '-out', cert_file, '-days', '365', '-nodes', '-subj', '/CN=localhost'
+            ], check=True)
+        
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert_file, key_file)
+        
+        print(f"🔒 HTTPS Web interface will be available at: https://{args.host}:{args.port}")
+        print(f"⚠️  Browser will show security warning - click 'Advanced' and 'Proceed'")
+        app.run(host=args.host, port=args.port, debug=args.debug, ssl_context=context)
+    else:
+        print(f"🌐 HTTP Web interface will be available at: http://{args.host}:{args.port}")
+        print(f"⚠️  Note: Twitch OAuth requires HTTPS. Use --https flag for production.")
+    
     print(f"📝 Make sure your EC2 security group allows inbound traffic on port {args.port}")
     print(f"🔒 Only accessible from your IP addresses defined in the security group")
     print(f"⏹️  Press Ctrl+C to stop the server")
     print()
     
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    if not args.https:
+        app.run(host=args.host, port=args.port, debug=args.debug)
