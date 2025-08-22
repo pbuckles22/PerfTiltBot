@@ -17,7 +17,9 @@
         {
             "Effect": "Allow",
             "Action": [
-                "logs:DescribeLogGroups"
+                "logs:DescribeLogGroups",
+                "logs:FilterLogEvents",
+                "logs:GetLogEvents"
             ],
             "Resource": "*"
         }
