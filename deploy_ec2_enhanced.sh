@@ -278,10 +278,14 @@ start_bot() {
     local bot_auth_path="$(pwd)/$bot_auth"
     local channel_config_path="$(pwd)/$channel_config"
     
-    # Run the container with proper volume mounts
+    # Run the container with proper volume mounts and CloudWatch logging
     docker run -d \
         --name "$container_name" \
         --restart unless-stopped \
+        --log-driver=awslogs \
+        --log-opt awslogs-region=us-west-2 \
+        --log-opt awslogs-group="/ec2/perftiltbot" \
+        --log-opt awslogs-stream="$container_name" \
         -e "CHANNEL_NAME=$channel_name" \
         -e "BOT_NAME=$bot_name" \
         -v "$bot_auth_path:/app/configs/bots/${bot_name}_auth_secrets.yaml" \
@@ -292,6 +296,8 @@ start_bot() {
     if [ $? -eq 0 ]; then
         print_status "Bot started successfully!"
         print_status "Container name: $container_name"
+        print_status "CloudWatch log group: /ec2/perftiltbot"
+        print_status "CloudWatch log stream: $container_name"
         print_status "To view logs: docker logs $container_name"
         print_status "To stop: docker stop $container_name"
     else
@@ -488,6 +494,39 @@ view_logs() {
     fi
 }
 
+# Function to view CloudWatch logs
+view_cloudwatch_logs() {
+    local channel="$1"
+    
+    if [ -z "$channel" ]; then
+        print_error "Channel name required for cloudwatch-logs command"
+        exit 1
+    fi
+    
+    local channel_config="configs/channels/${channel}_config_secrets.yaml"
+    if [ ! -f "$channel_config" ]; then
+        print_error "Channel configuration file not found: $channel_config"
+        exit 1
+    fi
+    
+    local bot_name=$(get_bot_name_from_config "$channel_config")
+    local container_name="$(echo "$bot_name" | tr '[:upper:]' '[:lower:]')-$(echo "$channel" | tr '[:upper:]' '[:lower:]')"
+    
+    print_status "Showing CloudWatch logs for $container_name (Ctrl+C to exit):"
+    print_status "Log group: /ec2/perftiltbot"
+    print_status "Log stream: $container_name"
+    
+    # Check if AWS CLI is available
+    if ! command -v aws &> /dev/null; then
+        print_error "AWS CLI is not installed. Please install it to view CloudWatch logs."
+        print_status "Install with: sudo yum install -y aws-cli"
+        exit 1
+    fi
+    
+    # Show CloudWatch logs
+    aws logs tail "/ec2/perftiltbot" --log-stream-names "$container_name" --follow --region us-west-2
+}
+
 # Main script logic
 command=${1:-deploy}
 channel=${2:-}
@@ -537,6 +576,9 @@ case "$command" in
     "logs")
         view_logs "$channel"
         ;;
+    "cloudwatch-logs")
+        view_cloudwatch_logs "$channel"
+        ;;
     "deploy")
         if [ -z "$channel" ]; then
             print_error "Channel name required for deploy command"
@@ -567,6 +609,7 @@ case "$command" in
             echo "  restart-all        - Stop and restart all bots with latest image"
             echo "  status [channel]   - Show bot status (all or specific channel)"
             echo "  logs <channel>     - View bot logs for a specific channel"
+            echo "  cloudwatch-logs <channel> - View CloudWatch logs for a specific channel"
             echo "  deploy <channel>   - Build image and deploy a specific channel"
             echo ""
             echo "Shortcut: $0 <channel> (same as start)"
@@ -578,6 +621,7 @@ case "$command" in
             echo "  $0 restart-all"
             echo "  $0 status PerfectTilt"
             echo "  $0 logs PerfectTilt"
+            echo "  $0 cloudwatch-logs PerfectTilt"
             exit 1
         fi
         ;;
