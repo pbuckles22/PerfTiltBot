@@ -3,6 +3,10 @@
 !configs/examples/*_secrets.yaml
 .env
 
+# SSH Keys
+*.pem
+*.ppk
+
 # Go specific
 *.exe
 *.exe~
